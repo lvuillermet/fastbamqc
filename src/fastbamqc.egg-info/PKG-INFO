@@ -1,0 +1,146 @@
+Metadata-Version: 2.4
+Name: fastbamqc
+Version: 0.3.0
+Summary: Fast mapping and depth QC metrics for sorted, indexed BAM files (whole genome or amplicon/panel)
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: pysam>=0.21
+Requires-Dist: numpy>=1.21
+Provides-Extra: xlsx
+Requires-Dist: openpyxl>=3.0; extra == "xlsx"
+
+# fastbamqc
+
+Fast mapping and depth metrics (percentage mapped, mean depth, percentage of positions covered at >= X)
+for coordinate-sorted and indexed BAM files. Works on whole genomes and on amplicon / panel data.
+
+## Installation
+    pip install .            # or: pip install -e .  (development: code changes are picked up immediately)
+    pip install ".[xlsx]"    # + Excel export
+
+`pysam` is not available on native Windows: use WSL.
+
+## Usage
+Whole genome (one row per sample):
+
+    fastbamqc -i ./bams -f "*_sorted.bam" -o ./results -F tsv -c 16 -t 2
+
+Amplicon-seq / panel (one row per gene and per sample):
+
+    fastbamqc -i ./bams -f "*_sorted.bam" -o ./results --bed amplicons.bed -d 1,10,30,100,500
+
+`fastbamqc --help` lists all options. BAM files must be sorted and indexed (`samtools index`).
+
+## Interpretability (on by default)
+Every result row (one sample in whole-genome mode, one gene in amplicon mode) gets an extra last column
+`interpretability`. By default the rule is **at least 75% of the region covered at >= 10X**:
+
+    fastbamqc -i ./bams -o ./results --bed amplicons.bed                                  # 75% at 10X
+    fastbamqc -i ./bams -o ./results --bed amplicons.bed --interp-depth 20 --interp-pct 90
+    fastbamqc -i ./bams -o ./results --no-interp                                          # no column, no sliders
+
+A row is `INTERPRETABLE` when at least `--interp-pct` percent of its region (the genome, or the gene) is covered by
+at least `--interp-depth` reads, and `NON_INTERPRETABLE` otherwise.
+
+- `--interp-depth` and `--interp-pct` are independent: the one you omit keeps its default (10X / 75%).
+- `--no-interp` removes the column (and the report sliders); it cannot be combined with the two options above.
+- The depth threshold is added to the `<d>X` columns if it is not already in `--depths`, so the verdict can always be
+  re-checked from the table.
+- The decision uses the 2-decimal value shown in the table (`>=` comparison: exactly 75.00 is INTERPRETABLE).
+- In whole-genome mode the region is the set of analysed contigs: use `--contigs` to exclude decoy/alt contigs.
+
+## HTML report (optional)
+Add `--report` to get a single self-contained HTML file (`<out-dir>/<out-name>.html`) next to the tables.
+It has no external dependency: it opens offline in any browser and can be e-mailed.
+
+    fastbamqc -i ./bams -o ./results --bed amplicons.bed --report --report-title "Run 42"
+
+- **Overview** tab: summary cards, comparison charts of all samples and the full sortable/filterable table (CSV download).
+  - whole genome: mean coverage per sample (coloured by interpretability), % mapped, breadth of coverage, a **Duplicates** section, coverage curves;
+  - amplicon: targets x samples heatmap (choose the metric), interpretable targets per sample, coverage and interpretability rate per target.
+- **Sample details** tab: pick a sample in the menu (or use the arrows).
+  - whole genome: metrics, breadth of coverage, duplicates and read breakdown, depth distribution, coverage curve, mean depth per contig (largest 100 contigs);
+  - amplicon: table of the targets, any metric per target, depth profile along each target (selector, shared y-axis, log scale) and a gallery of all targets.
+- `--report` makes the analysis slightly slower (depth histograms/profiles are collected); the tables are identical with or without it.
+- In whole-genome mode `--report` turns `--read-stats` on (needed for the Duplicates section; about +50-60% run time on synthetic data, see below). The section is not shown in amplicon mode, where duplicates are expected.
+- A link such as `report.html#sample=S1` opens directly on a sample.
+
+
+**Live interpretability rule.** The report always has two
+sliders in the header (unless `--no-interp`) (depth X and minimum % covered) re-evaluate every result live: verdicts, charts,
+tables and the **CSV download** all follow the sliders (the file name carries the values, e.g.
+`fastbamqc_all_results_10X_75pct.csv`; the `<X>X` column of the chosen depth is added when it is not in
+`--depths`). The percentage covered at each slider depth is computed exactly by fastbamqc (52 depths:
+1-20, then 25-100 by 5, 120-300 by 20, 350, 400, 500, 600, 800, 1000, plus your `--depths`), so the
+verdicts are identical to a new run with the same thresholds. The report grows by about 0.3 KB per
+table row (roughly 3 MB for 96 samples x 100 targets; not measured at that size). With `--no-interp` there is no rule and no sliders.
+
+**Coverage curves.** The x axis of the coverage curves stops at 200X, or at your largest `--depths`
+value when it is higher (and earlier when the data stops before).
+
+## Extra metrics (optional)
+
+Both options are off by default: without them the output and the speed are unchanged.
+
+### `--uniformity` (whole genome and amplicon)
+
+| column | meaning |
+|---|---|
+| `median_coverage` | median depth |
+| `cv_coverage` | standard deviation / mean depth (0 = perfectly even) |
+| `pct_above_0.2_mean` | % of positions with depth >= 0.2 x the mean (classic uniformity) |
+| `fold_80` | mean depth / depth reached by 80% of the positions (1 = even; same idea as Picard's `FOLD_80_BASE_PENALTY`) |
+
+In amplicon mode they are computed per target (exact). In whole-genome mode they come from a depth
+histogram capped at 1000X: a value that would need the capped tail is reported as `NA`. Cost: negligible.
+
+### `--read-stats` (whole genome only)
+
+| column | meaning |
+|---|---|
+| `pct_properly_paired`, `pct_mapq0` | % of primary mapped reads |
+| `primary_mapped_reads` | primary mapped reads (denominator of the percentages) |
+| `secondary_reads`, `supplementary_reads`, `qcfail_reads` | counts |
+| `marked_dup_reads`, `pct_marked_dup` | reads flagged 0x400 in the BAM |
+| `est_dup_reads`, `pct_est_dup` | duplicates **estimated from the alignments** (see below) |
+| `mean_coverage_nodup` | mean depth without the duplicates (flagged **or** estimated) |
+
+These counters ignore `--min-mapq` / `--exclude-flags` (only `mean_coverage_nodup` follows them) and
+cover the selected contigs. Percentages use the primary mapped reads as denominator.
+
+**How duplicates are estimated.** A BAM that was never run through `MarkDuplicates` has no 0x400 flag.
+In a coordinate-sorted BAM the reads that start at the same position are consecutive, so a primary read
+is counted as a duplicate when an earlier read has the same start, end, strand, mate start and template
+length (a duplicated pair counts as 2 reads). Only the keys of the current start position are kept in
+memory. This is an **estimate**, not Picard / samtools markdup:
+- reads that differ only by soft clipping are not matched (Picard uses the unclipped 5' position);
+- at very high depth on a small genome, independent fragments can coincide by chance and are counted
+  as duplicates (0.01% on a synthetic 15X genome; not measured at 250X). When your BAMs have been
+  marked, compare `pct_est_dup` with `pct_marked_dup` to see how close the estimate is on your data.
+
+**Cost.** `--read-stats` adds a per-read check: on a synthetic 800,000-read BAM the run took about
++50-60% (1.0 s -> 1.6 s). `--uniformity` alone: no measurable change.
+
+The HTML report adds the matching charts (duplicate rate, mean coverage with and without duplicates,
+evenness) when these columns are present.
+
+## Amplicon / panel mode (`--bed`)
+BED columns: 1 chromosome, 2 start (0-based), 3 end (exclusive), 4 gene name.
+Without a 4th column, the target is named `chrom:start-end`.
+
+Outputs:
+- `<out-dir>/<out-name>.<fmt>`: all rows of all samples (concatenated);
+- `<out-dir>/per_sample/<sample>.amplicons.<fmt>`: one file per sample.
+
+Columns: `sample, gene, chrom, start, end, length, n_regions, reads, percentage_of_mapped, mean_coverage, <d>X`.
+
+BED lines sharing the same name (`--same-gene`):
+- `merge` (default): grouped into ONE target; their regions are merged (no double counting).
+  `start`/`end` = extent of the target, `length` = bases actually targeted, `n_regions` = number of merged regions;
+- `separate`: every BED line is an independent target (the name may repeat).
+
+Two different names are never merged, even if they overlap: each gene is computed independently.
+
+Notes:
+- BED contig names must match the BAM ones (`chr1` vs `1`), otherwise an explicit error is raised.
+- Do NOT exclude duplicates (`--exclude-flags 1024`) on amplicon data: almost all reads are "duplicates" by construction.

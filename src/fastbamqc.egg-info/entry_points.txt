@@ -1,0 +1,2 @@
+[console_scripts]
+fastbamqc = fastbamqc.cli:main

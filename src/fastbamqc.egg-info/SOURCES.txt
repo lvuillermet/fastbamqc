@@ -1,0 +1,14 @@
+README.md
+pyproject.toml
+src/fastbamqc/__init__.py
+src/fastbamqc/__main__.py
+src/fastbamqc/cli.py
+src/fastbamqc/core.py
+src/fastbamqc/report.py
+src/fastbamqc.egg-info/PKG-INFO
+src/fastbamqc.egg-info/SOURCES.txt
+src/fastbamqc.egg-info/dependency_links.txt
+src/fastbamqc.egg-info/entry_points.txt
+src/fastbamqc.egg-info/requires.txt
+src/fastbamqc.egg-info/top_level.txt
+src/fastbamqc/templates/report.html

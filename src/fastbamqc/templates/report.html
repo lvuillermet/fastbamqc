@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root{
+  --bg:#f4f6fa; --card:#ffffff; --ink:#1b2333; --muted:#64708a; --line:#e3e8f1; --grid:#e9edf4;
+  --accent:#2f6fed; --bar:#4f86f0; --ok:#1f9d63; --bad:#d9534f; --warn:#e8a317;
+  --pill-ok-bg:#dcf5e8; --pill-bad-bg:#fbe3e2; --hover:#eef3ff;
+  --shadow:0 1px 2px rgba(20,30,60,.06),0 4px 14px rgba(20,30,60,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#10141d; --card:#181e2a; --ink:#e6eaf3; --muted:#92a0bb; --line:#283043; --grid:#232b3b;
+    --accent:#6b9bff; --bar:#5b8fff; --ok:#34c98a; --bad:#ef6b66; --warn:#f0b94a;
+    --pill-ok-bg:#133a2a; --pill-bad-bg:#43211f; --hover:#1f2840; --shadow:none;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+header.top{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.hwrap{max-width:1320px;margin:0 auto;padding:14px 24px 0;position:relative}
+.rulebox{position:absolute;right:24px;top:14px;width:300px;background:var(--bg);border:1px solid var(--line);
+  border-radius:10px;padding:8px 12px 10px;font-size:12px}
+.rulebox .rt{display:flex;justify-content:space-between;align-items:center;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.4px;font-size:11px}
+.rulebox .rst{padding:0 8px;font-size:11px}
+.rulebox label{display:grid;grid-template-columns:84px 1fr 46px;align-items:center;gap:8px;margin-top:6px;color:var(--muted)}
+.rulebox input[type=range]{width:100%;margin:0;accent-color:var(--accent)}
+.rulebox output{font-weight:700;color:var(--ink);text-align:right}
+.rulebox .note{color:var(--muted);font-size:11px;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hasrule .hwrap{min-height:150px}
+.hasrule .brand,.hasrule h1,.hasrule .chips{margin-right:330px}
+@media (max-width:900px){.rulebox{position:static;width:auto;margin:4px 0 10px}.hasrule .brand,.hasrule h1,.hasrule .chips{margin-right:0}}
+.sect{margin:26px 0 10px;padding-top:14px;border-top:1px solid var(--line)}
+.sect h2{margin:0 0 4px;font-size:17px}
+.sect p{margin:0;color:var(--muted);font-size:13px;max-width:900px}
+.brand{display:flex;align-items:baseline;gap:10px}
+.logo{font-weight:800;letter-spacing:.5px;font-size:15px;color:var(--accent)}
+.ver{color:var(--muted);font-size:12px}
+h1{margin:2px 0 8px;font-size:22px;font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.chip{background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:1px 10px;font-size:12px;color:var(--muted)}
+nav.tabs{display:flex;gap:4px}
+nav.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:8px 16px;font:inherit;
+  font-weight:600;color:var(--muted);cursor:pointer}
+nav.tabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
+nav.tabs button:hover{color:var(--ink)}
+main{max-width:1320px;margin:0 auto;padding:20px 24px 40px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;box-shadow:var(--shadow)}
+.kl{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+.kv{font-size:24px;font-weight:700;margin-top:2px;overflow-wrap:anywhere}
+.kv.kvl{font-size:17px;margin-top:6px}
+.ks{color:var(--muted);font-size:12px;margin-top:2px}
+.kpi.ok .kv{color:var(--ok)} .kpi.bad .kv{color:var(--bad)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px 12px;
+  margin-bottom:16px;box-shadow:var(--shadow);min-width:0}
+.ph{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.panel h3{margin:0;font-size:15px}
+.sub{margin:2px 0 8px;color:var(--muted);font-size:12.5px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px}
+.two>*{min-width:0}
+.chart{overflow-x:auto;min-height:40px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin:2px 0 6px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.ramp{display:flex;align-items:center;gap:8px;margin:8px 0 2px;font-size:12px;color:var(--muted)}
+.ramp b{display:inline-block;width:180px;height:10px;border-radius:5px}
+.pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.pill.ok{background:var(--pill-ok-bg);color:var(--ok)} .pill.bad{background:var(--pill-bad-bg);color:var(--bad)}
+.warn{background:var(--pill-bad-bg);color:var(--bad);border-radius:10px;padding:8px 14px;margin-bottom:14px}
+select,input.filter,.btn{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);
+  border-radius:8px;padding:5px 9px}
+.btn{cursor:pointer} .btn:hover{background:var(--hover)}
+label.chk{font-size:12.5px;color:var(--muted);margin-left:10px;white-space:nowrap}
+.ctrl{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.picker{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.picker select{min-width:240px;font-size:15px;font-weight:600}
+.tools{display:flex;align-items:center;gap:10px;margin:6px 0 8px;flex-wrap:wrap}
+.tools .count{color:var(--muted);font-size:12px;flex:1}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:8px}
+table.tbl{border-collapse:collapse;width:100%;font-size:13px}
+table.tbl th,table.tbl td{padding:5px 10px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:left}
+table.tbl th{position:sticky;top:0;background:var(--card);cursor:pointer;user-select:none;z-index:1;font-weight:600}
+table.tbl th.num,table.tbl td.num{text-align:right;font-variant-numeric:tabular-nums}
+table.tbl th .qm{display:inline-block;width:15px;height:15px;line-height:14px;margin-left:6px;border:1px solid var(--muted);border-radius:50%;
+  color:var(--muted);font-size:10px;font-weight:700;text-align:center;cursor:help;vertical-align:1px}
+table.tbl th .qm:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+table.tbl th.asc:after{content:" \25B2";font-size:9px} table.tbl th.desc:after{content:" \25BC";font-size:9px}
+table.tbl tbody tr:hover{background:var(--hover)}
+table.kv td:first-child{color:var(--muted);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+table.kv td{padding:4px 10px;border-bottom:1px solid var(--line)}
+table.kv{border-collapse:collapse;width:100%}
+.minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:8px}
+.mini{border:1px solid var(--line);border-radius:8px;padding:6px 8px 4px;cursor:pointer;background:var(--card)}
+.mini:hover{background:var(--hover)} .mini.sel{outline:2px solid var(--accent)}
+.mini .mt{display:flex;justify-content:space-between;gap:6px;font-size:12px;font-weight:600}
+.mini .mt span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini svg{display:block;width:100%;height:auto}
+footer{max-width:1320px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+footer code{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:2px 6px;
+  display:block;white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0}
+#tip{position:fixed;display:none;z-index:50;pointer-events:none;background:#1b2333;color:#fff;font-size:12px;
+  line-height:1.4;padding:6px 9px;border-radius:6px;white-space:pre;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+</style>
+</head>
+<body>
+<header class="top"><div class="hwrap">
+  <div class="brand"><span class="logo">FASTBAMQC</span><span class="ver" id="ver"></span></div>
+  <h1 id="title"></h1>
+  <div class="chips" id="chips"></div>
+  <div class="rulebox" id="rulebox" hidden>
+    <div class="rt"><span>Interpretability rule</span><button type="button" class="btn rst" id="rrs" title="Back to the values given on the command line">reset</button></div>
+    <label>Depth &ge; <input type="range" id="rx" aria-label="Minimum depth (X)"><output id="rxv"></output></label>
+    <label>Covered &ge; <input type="range" id="rp" aria-label="Minimum percentage of the region covered"><output id="rpv"></output></label>
+    <div class="note" id="rnote"></div>
+  </div>
+  <nav class="tabs">
+    <button type="button" data-tab="overview" class="on">Overview</button>
+    <button type="button" data-tab="sample">Sample details</button>
+  </nav>
+</div></header>
+<main>
+  <section id="tab-overview"></section>
+  <section id="tab-sample" hidden>
+    <div class="picker">
+      <button type="button" class="btn" id="prev" title="Previous sample">&#9664;</button>
+      <select id="sel" aria-label="Sample"></select>
+      <button type="button" class="btn" id="next" title="Next sample">&#9654;</button>
+    </div>
+    <div id="sample-body"></div>
+  </section>
+</main>
+<footer id="foot"></footer>
+
+<script id="report-data" type="application/json">__DATA__</script>
+__DETAILS__
+<script>
+(function () {
+"use strict";
+
+/* ====================================================================== data */
+const $ = (id) => document.getElementById(id);
+const D = JSON.parse($("report-data").textContent);
+const PALETTE = ["#4f86f0", "#e8743b", "#19a979", "#945ecf", "#e8a317", "#13a4b4", "#d9534f", "#6f7f95"];
+const FONT = "font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif";
+const COLS = D.columns, DEPTHS = D.depths, RULE = D.interp, GENOME = D.mode === "genome";
+let RULE_COL = RULE ? RULE.depth + "X" : null;
+const RULE0 = RULE ? { depth: RULE.depth, pct: RULE.pct } : null;          // values given on the command line
+const GRID = RULE && D.grid && D.grid.rows && D.grid.rows.length === D.rows.length ? D.grid : null;
+const XCAP = Math.max.apply(null, [200].concat(DEPTHS));                   // max depth (X) of the coverage curves
+
+const ROWS = D.rows.map((r) => { const o = {}; COLS.forEach((c, i) => { o[c] = r[i]; }); return o; });
+const BY = {}; D.samples.forEach((s) => { BY[s] = []; });
+ROWS.forEach((r) => { BY[r.sample].push(r); });
+const IDX = {}; D.samples.forEach((s, i) => { IDX[s] = i; });
+const DETAIL = {};
+function detail(s) {                       // per-sample extra data, parsed lazily
+  if (!(s in DETAIL)) { const el = $("detail-" + IDX[s]); DETAIL[s] = el ? JSON.parse(el.textContent) : null; }
+  return DETAIL[s];
+}
+const isOK = (r) => !!r && r.interpretability === "INTERPRETABLE";
+
+/* ---- interpretability rule, adjustable from the header sliders */
+function activeCols() {                    // table columns: the rule depth column is added when --depths lacks it
+  const c = COLS.slice();
+  if (RULE && c.indexOf(RULE_COL) < 0) { const i = c.indexOf("interpretability"); c.splice(i < 0 ? c.length : i, 0, RULE_COL); }
+  return c;
+}
+function ruleSuffix() { return RULE ? "_" + RULE.depth + "X_" + RULE.pct + "pct" : ""; }
+function applyRule(depth, pct) {           // recompute the depth column and the verdict of every row
+  RULE.depth = depth; RULE.pct = pct; RULE_COL = depth + "X";
+  const gi = GRID ? GRID.x.indexOf(depth) : -1, native = COLS.indexOf(RULE_COL) >= 0;
+  ROWS.forEach((r, i) => {
+    if (!native) r[RULE_COL] = gi >= 0 ? GRID.rows[i][gi] / 100 : null;
+    r.interpretability = r[RULE_COL] != null && r[RULE_COL] >= pct ? "INTERPRETABLE" : "NON_INTERPRETABLE";
+  });
+}
+
+// amplicon mode: targets are the same, in the same order, for every sample
+const GENE_ROWS = GENOME ? [] : (BY[D.samples[0]] || []);
+const GENE_LABELS = (function () {
+  const cnt = {}; GENE_ROWS.forEach((r) => { cnt[r.gene] = (cnt[r.gene] || 0) + 1; });
+  return GENE_ROWS.map((r) => (cnt[r.gene] > 1 ? r.gene + " [" + r.start + "-" + r.end + "]" : r.gene));
+})();
+
+/* ================================================================== helpers */
+const NS = "http://www.w3.org/2000/svg";
+function h(tag, props, kids) {
+  const e = document.createElement(tag);
+  if (props) for (const k in props) {
+    if (k === "class") e.className = props[k];
+    else if (k === "text") e.textContent = props[k];
+    else e.setAttribute(k, props[k]);
+  }
+  (kids || []).forEach((c) => { if (c != null) e.appendChild(typeof c === "string" ? document.createTextNode(c) : c); });
+  return e;
+}
+function sv(tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  return e;
+}
+function T(x, y, str, o) {                 // SVG text
+  o = o || {};
+  const a = { x: r1(x), y: r1(y), "font-size": o.size || 11, "text-anchor": o.anchor || "start",
+    style: "fill:" + (o.fill || "var(--muted)") + (o.weight ? ";font-weight:" + o.weight : "") };
+  if (o.rot) a.transform = "rotate(" + o.rot + " " + r1(x) + " " + r1(y) + ")";
+  return sv("text", a, str);
+}
+function r1(v) { return Math.round(v * 10) / 10; }
+function fx(v, d) { return v == null || isNaN(v) ? "-" : Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function fi(v) { return v == null || isNaN(v) ? "-" : Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 }); }
+function fnum(v) { return typeof v !== "number" ? (v == null ? "-" : String(v)) : (Number.isInteger(v) ? fi(v) : fx(v, 2)); }
+function trunc(s, n) { s = String(s); return s.length > n ? s.slice(0, n - 1) + "\u2026" : s; }
+const sum = (a) => a.reduce((x, y) => x + y, 0);
+function median(a) {
+  if (!a.length) return null;
+  const b = a.slice().sort((x, y) => x - y), m = b.length >> 1;
+  return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2;
+}
+/* Width available to a chart. Inside a two-column grid (.two) the first panel is drawn while its
+   neighbour does not exist yet, so its measured width would be the full row: compute the final
+   column width from the grid instead. */
+function widthOf(host) {
+  let w = host.clientWidth || 900;
+  const pan = host.parentElement, grid = pan && pan.parentElement;
+  if (grid && grid.classList && grid.classList.contains("two") && grid.clientWidth) {
+    const gw = grid.clientWidth, cols = gw >= 2 * 420 + 16 ? 2 : 1;
+    w = Math.floor((gw - 16 * (cols - 1)) / cols) - (pan.clientWidth - host.clientWidth);
+  }
+  return Math.max(320, w);
+}
+
+/* ---- axes */
+function niceStep(raw) {
+  const e = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / e;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * e;
+}
+function axis(max, n) {                    // rounded-up top
+  if (!(max > 0)) max = 1;
+  const step = niceStep(max / (n || 5)), top = Math.ceil(max / step - 1e-9) * step, t = [];
+  for (let v = 0; v <= top + step * 1e-6; v += step) t.push(+v.toPrecision(12));
+  return { ticks: t, max: top };
+}
+function axisFit(max, n) {                 // domain = exactly [0, max]
+  if (!(max > 0)) max = 1;
+  const step = niceStep(max / (n || 5)), t = [];
+  for (let v = 0; v <= max + step * 1e-6; v += step) t.push(+v.toPrecision(12));
+  return { ticks: t, max: max };
+}
+function tickLabel(v) {
+  if (v >= 1e6) return +(v / 1e6).toPrecision(3) + "M";
+  if (v >= 1e4) return +(v / 1e3).toPrecision(3) + "k";
+  return String(+v.toPrecision(6));
+}
+function yScale(ymax, log, MT, ih) {
+  if (!(ymax > 0)) ymax = 1;
+  if (!log) { const a = axis(ymax, 5); return { ticks: a.ticks, Y: (v) => MT + ih - v / a.max * ih }; }
+  let top = 10; while (top < ymax) top *= 10;
+  const ticks = [0]; for (let t = 1; t <= top; t *= 10) ticks.push(t);
+  const L = Math.log10(1 + top);
+  return { ticks: ticks, Y: (v) => MT + ih - Math.log10(1 + Math.max(0, v)) / L * ih };
+}
+
+/* ---- colours */
+const STOPS = ["#eef3fd", "#a9c1f6", "#4a78e0", "#1b3a8c"].map((x) => [1, 3, 5].map((i) => parseInt(x.substr(i, 2), 16)));
+function ramp(t) {
+  t = Math.max(0, Math.min(1, t));
+  const p = t * (STOPS.length - 1), i = Math.min(STOPS.length - 2, Math.floor(p)), f = p - i, a = STOPS[i], b = STOPS[i + 1];
+  return "rgb(" + a.map((v, k) => Math.round(v + (b[k] - v) * f)).join(",") + ")";
+}
+const verdictColor = (r) => (!r ? "var(--grid)" : isOK(r) ? "var(--ok)" : "var(--bad)");
+
+/* ---- tooltip */
+const TIP = h("div", { id: "tip" }); document.body.appendChild(TIP);
+function showTip(ev, text) {
+  TIP.textContent = text; TIP.style.display = "block";
+  let x = ev.clientX + 14; const y = ev.clientY + 14, w = TIP.offsetWidth;
+  if (x + w > window.innerWidth - 8) x = ev.clientX - w - 14;
+  TIP.style.left = x + "px"; TIP.style.top = y + "px";
+}
+function hideTip() { TIP.style.display = "none"; }
+function wrapText(t, n) {
+  const out = []; let line = "";
+  String(t).split(" ").forEach((w) => { if (line && (line + " " + w).length > n) { out.push(line); line = w; } else line = line ? line + " " + w : w; });
+  if (line) out.push(line); return out.join("\n");
+}
+function tipOn(node, fn) {
+  node.addEventListener("mousemove", (ev) => showTip(ev, typeof fn === "function" ? fn(ev) : fn));
+  node.addEventListener("mouseleave", hideTip);
+}
+
+/* ---- layout blocks */
+function panel(parent, title, sub, controls) {
+  const body = h("div", { class: "chart" });
+  const head = h("div", { class: "ph" }, [h("div", {}, [h("h3", { text: title }), sub ? h("p", { class: "sub", text: sub }) : null]), controls || null]);
+  parent.appendChild(h("section", { class: "panel" }, [head, body]));
+  return body;
+}
+function section(parent, title, text) {
+  parent.appendChild(h("div", { class: "sect" }, [h("h2", { text: title }), text ? h("p", { text: text }) : null]));
+}
+function kpis(parent, items) {
+  const g = h("div", { class: "kpis" });
+  items.forEach((k) => g.appendChild(h("div", { class: "kpi " + (k.cls || "") }, [
+    h("div", { class: "kl", text: k.label }), h("div", { class: "kv" + (String(k.value).length > 9 ? " kvl" : ""), text: k.value }),
+    k.sub ? h("div", { class: "ks", text: k.sub }) : null])));
+  parent.appendChild(g);
+}
+function legendEl(items) {
+  return h("div", { class: "legend" }, items.map((it) => h("span", {}, [h("i", { style: "background:" + it.color }), it.name])));
+}
+function pillFor(v) { return h("span", { class: "pill " + (v === "INTERPRETABLE" ? "ok" : "bad"), text: v == null ? "-" : v }); }
+const VERDICT_LEGEND = [{ name: "INTERPRETABLE", color: "var(--ok)" }, { name: "NON_INTERPRETABLE", color: "var(--bad)" }];
+function select(options, value, onchange) {
+  const s = h("select");
+  options.forEach((o) => { const op = h("option", { value: o.value, text: o.label }); if (String(o.value) === String(value)) op.selected = true; s.appendChild(op); });
+  s.addEventListener("change", () => onchange(s.value));
+  return s;
+}
+function checkbox(label, checked, onchange) {
+  const c = h("input", { type: "checkbox" }); c.checked = !!checked;
+  c.addEventListener("change", () => onchange(c.checked));
+  return h("label", { class: "chk" }, [c, " " + label]);
+}
+
+/* ================================================================== charts */
+function barChart(host, o) {
+  host.innerHTML = "";
+  if (o.legend) host.appendChild(legendEl(o.legend));
+  const n = o.labels.length, ns = o.series.length, W = widthOf(host), H = o.height || 300;
+  let maxLen = 0; o.labels.forEach((l) => { maxLen = Math.max(maxLen, String(l).length); });
+  const ML = 58, MR = 16, MT = 16, slot = Math.max(ns > 1 ? 18 * ns : 22, (W - ML - MR) / Math.max(n, 1));
+  const innerW = slot * n, svgW = ML + MR + innerW;
+  const rotate = slot < maxLen * 6.2 + 6;
+  const MB = (rotate ? Math.min(130, 16 + Math.min(maxLen, 18) * 5.6) : 30) + (o.xLabel ? 16 : 0);
+  const innerH = H - MT - MB;
+  let vmax = 0;
+  o.series.forEach((s) => s.values.forEach((v) => { if (v != null && v > vmax) vmax = v; }));
+  if (o.range) o.range.hi.forEach((v) => { if (v > vmax) vmax = v; });
+  (o.hlines || []).forEach((l) => { if (l.y > vmax) vmax = l.y; });
+  const ax = axis(o.ymax != null ? o.ymax : vmax, 5), Y = (v) => MT + innerH - v / ax.max * innerH;
+  const svg = sv("svg", { width: r1(svgW), height: H, viewBox: "0 0 " + r1(svgW) + " " + H, style: FONT + ";display:block", role: "img" });
+  ax.ticks.forEach((t) => {
+    svg.appendChild(sv("line", { x1: ML, x2: ML + innerW, y1: r1(Y(t)), y2: r1(Y(t)), style: "stroke:var(--grid)" }));
+    svg.appendChild(T(ML - 6, Y(t) + 4, tickLabel(t), { anchor: "end" }));
+  });
+  if (o.yLabel) svg.appendChild(T(12, MT + innerH / 2, o.yLabel, { anchor: "middle", rot: -90 }));
+  const bw = Math.min(46, slot * 0.72 / ns);
+  o.labels.forEach((lab, i) => {
+    const cx = ML + slot * (i + 0.5);
+    o.series.forEach((s, j) => {
+      const v = s.values[i]; if (v == null) return;
+      const x = cx - bw * ns / 2 + j * bw, y = Y(v);
+      const rect = sv("rect", { x: r1(x), y: r1(y), width: Math.max(1, r1(bw - 1)), height: Math.max(0, r1(Y(0) - y)), rx: 2,
+        style: "fill:" + (s.colors ? s.colors[i] : (s.color || "var(--bar)")) });
+      tipOn(rect, () => String(lab) + "\n" + (ns > 1 ? s.name + ": " : "") + (o.fmt ? o.fmt(v, s, i) : fnum(v)));
+      svg.appendChild(rect);
+    });
+    if (o.range) {                          // whiskers min..max for the first series
+      const xw = cx, lo = Y(o.range.lo[i]), hi = Y(o.range.hi[i]), st = "stroke:var(--ink);stroke-width:1";
+      svg.appendChild(sv("line", { x1: r1(xw), x2: r1(xw), y1: r1(lo), y2: r1(hi), style: st }));
+      svg.appendChild(sv("line", { x1: r1(xw - 3), x2: r1(xw + 3), y1: r1(hi), y2: r1(hi), style: st }));
+      svg.appendChild(sv("line", { x1: r1(xw - 3), x2: r1(xw + 3), y1: r1(lo), y2: r1(lo), style: st }));
+    }
+    const ly = MT + innerH + 14;
+    if (rotate) svg.appendChild(T(cx + 4, ly - 2, trunc(lab, 18), { anchor: "end", rot: -50, size: 10 }));
+    else svg.appendChild(T(cx, ly, trunc(lab, Math.max(3, Math.floor(slot / 6.2))), { anchor: "middle" }));
+  });
+  svg.appendChild(sv("line", { x1: ML, x2: ML + innerW, y1: r1(Y(0)), y2: r1(Y(0)), style: "stroke:var(--muted)" }));
+  (o.hlines || []).forEach((l) => {
+    const y = Y(l.y), col = l.color || "var(--bad)";
+    svg.appendChild(sv("line", { x1: ML, x2: ML + innerW, y1: r1(y), y2: r1(y), style: "stroke:" + col + ";stroke-width:1.5;stroke-dasharray:6 4" }));
+    if (l.label) svg.appendChild(T(ML + innerW - 4, y - 5, l.label, { anchor: "end", fill: col, weight: 600 }));
+  });
+  if (o.xLabel) svg.appendChild(T(ML + innerW / 2, H - 6, o.xLabel, { anchor: "middle" }));
+  host.appendChild(svg);
+}
+
+function lineChart(host, o) {
+  host.innerHTML = "";
+  if (o.legend) host.appendChild(legendEl(o.legend));
+  const W = widthOf(host), H = o.height || 300, ML = 58, MR = 18, MT = 14, MB = o.xLabel ? 46 : 30;
+  const iw = W - ML - MR, ih = H - MT - MB;
+  let xmax = o.xmax;
+  if (xmax == null) { xmax = 0; o.series.forEach((s) => s.x.forEach((v) => { if (v > xmax) xmax = v; })); }
+  let ymax = o.ymax;
+  if (ymax == null) {
+    ymax = 0; o.series.forEach((s) => s.y.forEach((v) => { if (v > ymax) ymax = v; }));
+    (o.hlines || []).forEach((l) => { if (l.y > ymax) ymax = l.y; });
+  }
+  const ax = axisFit(xmax, 6), ys = yScale(ymax, o.ylog, MT, ih), Y = ys.Y, X = (v) => ML + v / ax.max * iw;
+  const svg = sv("svg", { width: W, height: H, viewBox: "0 0 " + W + " " + H, style: FONT + ";display:block", role: "img" });
+  ys.ticks.forEach((t) => {
+    svg.appendChild(sv("line", { x1: ML, x2: ML + iw, y1: r1(Y(t)), y2: r1(Y(t)), style: "stroke:var(--grid)" }));
+    svg.appendChild(T(ML - 6, Y(t) + 4, tickLabel(t), { anchor: "end" }));
+  });
+  ax.ticks.forEach((t) => {
+    svg.appendChild(sv("line", { x1: r1(X(t)), x2: r1(X(t)), y1: MT + ih, y2: MT + ih + 4, style: "stroke:var(--muted)" }));
+    svg.appendChild(T(X(t), MT + ih + 17, tickLabel(t), { anchor: "middle" }));
+  });
+  svg.appendChild(sv("line", { x1: ML, x2: ML + iw, y1: MT + ih, y2: MT + ih, style: "stroke:var(--muted)" }));
+  if (o.xLabel) svg.appendChild(T(ML + iw / 2, H - 6, o.xLabel, { anchor: "middle" }));
+  if (o.yLabel) svg.appendChild(T(12, MT + ih / 2, o.yLabel, { anchor: "middle", rot: -90 }));
+
+  o.series.forEach((s) => {
+    if (!s.x.length) return;
+    let d = "", lastX = 0;
+    if (s.step) {                           // histogram-like: each y spans [x, x + dx]
+      const dx = s.x.length > 1 ? s.x[1] - s.x[0] : 1;
+      s.x.forEach((x, i) => { const y = r1(Y(s.y[i])); d += (i ? "L" : "M") + r1(X(x)) + "," + y + "L" + r1(X(x + dx)) + "," + y; });
+      lastX = X(s.x[s.x.length - 1] + dx);
+    } else {
+      s.x.forEach((x, i) => { d += (i ? "L" : "M") + r1(X(x)) + "," + r1(Y(s.y[i])); });
+      lastX = X(s.x[s.x.length - 1]);
+    }
+    if (s.fill) svg.appendChild(sv("path", { d: d + "L" + r1(lastX) + "," + r1(Y(0)) + "L" + r1(X(s.x[0])) + "," + r1(Y(0)) + "Z", style: "fill:" + s.color + ";fill-opacity:.18;stroke:none" }));
+    svg.appendChild(sv("path", { d: d, style: "fill:none;stroke:" + s.color + ";stroke-width:" + (s.width || 1.8) + ";stroke-linejoin:round" }));
+  });
+  (o.hlines || []).forEach((l) => {
+    const y = Y(l.y), col = l.color || "var(--bad)";
+    svg.appendChild(sv("line", { x1: ML, x2: ML + iw, y1: r1(y), y2: r1(y), style: "stroke:" + col + ";stroke-width:1.5;stroke-dasharray:6 4" }));
+    if (l.label) svg.appendChild(T(ML + iw - 4, y - 5, l.label, { anchor: "end", fill: col, weight: 600 }));
+  });
+  (o.vlines || []).forEach((l) => {
+    if (l.x < 0 || l.x > ax.max) return;
+    const x = X(l.x), col = l.color || "var(--bad)";
+    svg.appendChild(sv("line", { x1: r1(x), x2: r1(x), y1: MT, y2: MT + ih, style: "stroke:" + col + ";stroke-width:1.2;stroke-dasharray:6 4" }));
+    if (l.label) svg.appendChild(T(x + 4, MT + 11, l.label, { fill: col, weight: 600 }));
+  });
+
+  // hover: vertical cursor + values of every series at the nearest x
+  const cursor = sv("line", { y1: MT, y2: MT + ih, style: "stroke:var(--muted);stroke-dasharray:3 3", visibility: "hidden" });
+  svg.appendChild(cursor);
+  const ov = sv("rect", { x: ML, y: MT, width: Math.max(0, iw), height: Math.max(0, ih), style: "fill:transparent" });
+  ov.addEventListener("mousemove", (ev) => {
+    const rc = svg.getBoundingClientRect(), xv = (ev.clientX - rc.left - ML) / iw * ax.max;
+    const lines = [(o.xLabel || "x") + ": " + (o.xTip ? o.xTip(xv) : fnum(Math.round(xv * 10) / 10))];
+    o.series.forEach((s) => {
+      if (!s.x.length) return;
+      let i;
+      if (s.step) { const dx = s.x.length > 1 ? s.x[1] - s.x[0] : 1; i = Math.floor((xv - s.x[0]) / dx); }
+      else { let lo = 0, hi = s.x.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (s.x[m] <= xv) lo = m; else hi = m; } i = Math.abs(s.x[lo] - xv) <= Math.abs(s.x[hi] - xv) ? lo : hi; }
+      i = Math.max(0, Math.min(s.x.length - 1, i));
+      lines.push((o.series.length > 1 ? s.name + ": " : "value: ") + (o.yTip ? o.yTip(s.y[i]) : fnum(s.y[i])));
+    });
+    cursor.setAttribute("x1", r1(ev.clientX - rc.left)); cursor.setAttribute("x2", r1(ev.clientX - rc.left));
+    cursor.setAttribute("visibility", "visible");
+    showTip(ev, lines.join("\n"));
+  });
+  ov.addEventListener("mouseleave", () => { cursor.setAttribute("visibility", "hidden"); hideTip(); });
+  svg.appendChild(ov);
+  host.appendChild(svg);
+}
+
+function heatmap(host, o) {
+  host.innerHTML = "";
+  const W = widthOf(host), nr = o.rows.length, nc = o.cols.length;
+  let mr = 0, mc = 0;
+  o.rows.forEach((l) => { mr = Math.max(mr, String(l).length); }); o.cols.forEach((l) => { mc = Math.max(mc, String(l).length); });
+  const ch = nr > 60 ? 13 : 18, ML = Math.min(190, 14 + Math.min(mr, 28) * 6.2), MT = Math.min(140, 18 + Math.min(mc, 20) * 5.2);
+  const MR = Math.min(90, 10 + Math.min(mc, 22) * 3.2), MB = 8;
+  const cw = Math.max(16, Math.min(52, (W - ML - MR) / Math.max(nc, 1)));
+  const svgW = ML + MR + cw * nc, svgH = MT + MB + ch * nr;
+  const svg = sv("svg", { width: r1(svgW), height: r1(svgH), viewBox: "0 0 " + r1(svgW) + " " + r1(svgH), style: FONT + ";display:block", role: "img" });
+  o.cols.forEach((c, j) => svg.appendChild(T(ML + cw * j + cw / 2 + 2, MT - 6, trunc(c, 22), { anchor: "start", rot: -50, size: 10 })));
+  o.rows.forEach((rl, i) => {
+    svg.appendChild(T(ML - 6, MT + ch * i + ch / 2 + 4, trunc(rl, 30), { anchor: "end", size: ch < 16 ? 9 : 11 }));
+    for (let j = 0; j < nc; j++) {
+      const v = o.value(i, j);
+      const rect = sv("rect", { x: r1(ML + cw * j + 0.5), y: r1(MT + ch * i + 0.5), width: r1(cw - 1), height: r1(ch - 1), rx: 2, style: "fill:" + o.color(v, i, j) });
+      tipOn(rect, () => o.tip(i, j, v));
+      svg.appendChild(rect);
+      if (o.text && cw >= 30 && ch >= 16) {
+        const t = o.text(v, i, j);
+        if (t) svg.appendChild(T(ML + cw * j + cw / 2, MT + ch * i + ch / 2 + 4, t, { anchor: "middle", size: 10, fill: o.textColor ? o.textColor(v, i, j) : "var(--ink)" }));
+      }
+    }
+  });
+  host.appendChild(svg);
+}
+
+function spark(p, ymax, thr, log, color, w, hh) {   // small depth profile (amplicon gallery)
+  const svg = sv("svg", { width: w, height: hh, viewBox: "0 0 " + w + " " + hh });
+  const ty = (v) => (log ? Math.log10(1 + Math.max(0, v)) : v), top = ty(Math.max(ymax, thr || 0)) || 1;
+  const X = (i) => 3 + (p.depth.length > 1 ? i / (p.depth.length - 1) : 0.5) * (w - 6), Y = (v) => hh - 3 - ty(v) / top * (hh - 8);
+  let d = ""; p.depth.forEach((v, i) => { d += (i ? "L" : "M") + r1(X(i)) + "," + r1(Y(v)); });
+  svg.appendChild(sv("path", { d: d + "L" + r1(X(p.depth.length - 1)) + "," + r1(Y(0)) + "L" + r1(X(0)) + "," + r1(Y(0)) + "Z", style: "fill:" + color + ";fill-opacity:.25;stroke:none" }));
+  svg.appendChild(sv("path", { d: d, style: "fill:none;stroke:" + color + ";stroke-width:1.4" }));
+  if (thr) svg.appendChild(sv("line", { x1: 3, x2: w - 3, y1: r1(Y(thr)), y2: r1(Y(thr)), style: "stroke:var(--bad);stroke-width:1;stroke-dasharray:4 3" }));
+  svg.appendChild(sv("line", { x1: 3, x2: w - 3, y1: r1(Y(0)), y2: r1(Y(0)), style: "stroke:var(--line)" }));
+  return svg;
+}
+
+/* ================================================================== tables */
+const SHAPE = ["median_coverage", "cv_coverage", "pct_above_0.2_mean", "fold_80"].filter((c) => COLS.indexOf(c) >= 0);
+const HAS_DUP = COLS.indexOf("pct_est_dup") >= 0;
+function dig(c) { return (/^\d+X$/.test(c) || c === "mean_coverage" || c === "mean_coverage_nodup" || c.indexOf("percentage") === 0 || c.indexOf("pct_") === 0 || SHAPE.indexOf(c) >= 0) ? 2 : null; }
+function colsFor(noSample) {
+  return activeCols().filter((c) => !(noSample && c === "sample")).map((c) => ({
+    key: c, label: c, digits: dig(c),
+    type: c === "interpretability" ? "verdict" : (["sample", "gene", "chrom"].indexOf(c) >= 0 ? "str" : "num") }));
+}
+function dataTable(host, o) {
+  host.innerHTML = "";
+  const st = { key: null, dir: 1, q: "" };
+  const input = h("input", { type: "search", placeholder: "Filter rows...", class: "filter" });
+  const count = h("span", { class: "count" });
+  const csv = h("button", { class: "btn", type: "button", text: "Download CSV" });
+  const table = h("table", { class: "tbl" }), tbody = h("tbody"), hr = h("tr");
+  o.columns.forEach((c) => {
+    const th = h("th", { text: c.label });
+    if (c.help) {                                  // small "?" with an explanation on hover
+      const q = h("span", { class: "qm", text: "?", title: c.help });
+      tipOn(q, wrapText(c.help, 52));
+      q.addEventListener("click", (e) => e.stopPropagation());   // do not sort when clicking the "?"
+      th.appendChild(q);
+    }
+    th.addEventListener("click", () => { if (st.key === c.key) st.dir = -st.dir; else { st.key = c.key; st.dir = 1; } draw(); });
+    c.th = th; hr.appendChild(th);
+  });
+  table.appendChild(h("thead", {}, [hr])); table.appendChild(tbody);
+  host.appendChild(h("div", { class: "tools" }, [input, count, csv]));
+  host.appendChild(h("div", { class: "tablewrap", style: "max-height:" + (o.maxHeight || 440) + "px" }, [table]));
+  input.addEventListener("input", () => { st.q = input.value.trim().toLowerCase(); draw(); });
+  function view() {
+    let rows = o.rows;
+    if (st.q) rows = rows.filter((r) => o.columns.some((c) => String(r[c.key]).toLowerCase().indexOf(st.q) >= 0));
+    if (st.key) {
+      const num = o.columns.find((c) => c.key === st.key).type === "num";
+      rows = rows.slice().sort((a, b) => {
+        let x = a[st.key], y = b[st.key];
+        if (num) { x = Number(x); y = Number(y); if (isNaN(x)) x = -Infinity; if (isNaN(y)) y = -Infinity; return (x - y) * st.dir; }
+        return String(x).localeCompare(String(y), undefined, { numeric: true }) * st.dir;
+      });
+    }
+    return rows;
+  }
+  function draw() {
+    const rows = view(), frag = document.createDocumentFragment();
+    tbody.innerHTML = "";
+    rows.forEach((r) => {
+      const tr = h("tr");
+      o.columns.forEach((c) => {
+        const td = h("td", { class: c.type === "num" ? "num" : "" }), v = r[c.key];
+        if (c.type === "verdict") td.appendChild(pillFor(v));
+        else if (c.type === "num" && typeof v === "number") td.textContent = c.digits != null ? fx(v, c.digits) : fnum(v);
+        else td.textContent = v == null ? "-" : v;
+        tr.appendChild(td);
+      });
+      frag.appendChild(tr);
+    });
+    tbody.appendChild(frag);
+    count.textContent = fi(rows.length) + " / " + fi(o.rows.length) + " rows";
+    o.columns.forEach((c) => { c.th.className = (c.type === "num" ? "num " : "") + (st.key === c.key ? (st.dir > 0 ? "asc" : "desc") : ""); });
+    csv.onclick = () => {
+      const esc = (v) => { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+      const cell = (r, c) => { const v = r[c.key]; return esc(c.digits != null && typeof v === "number" ? v.toFixed(c.digits) : v); };
+      const lines = [o.columns.map((c) => esc(c.key)).join(",")].concat(rows.map((r) => o.columns.map((c) => cell(r, c)).join(",")));
+      const a = h("a", { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })), download: (o.filename || "table") + (o.noRuleSuffix ? "" : ruleSuffix()) + ".csv" });
+      document.body.appendChild(a); a.click(); a.remove();
+    };
+  }
+  draw();
+}
+function kvTable(host, pairs) {
+  host.innerHTML = "";
+  const tb = h("tbody");
+  pairs.forEach((p) => {
+    const td = h("td");
+    if (p[0] === "interpretability") td.appendChild(pillFor(p[1])); else td.textContent = fnum(p[1]);
+    tb.appendChild(h("tr", {}, [h("td", { text: p[0] }), td]));
+  });
+  host.appendChild(h("table", { class: "kv" }, [tb]));
+}
+
+/* ============================================================ distributions */
+function cumulative(hist) {                // y[i] = % of positions with depth >= i
+  const total = sum(hist), y = new Array(hist.length); let run = total;
+  for (let i = 0; i < hist.length; i++) { y[i] = total ? run / total * 100 : 0; run -= hist[i]; }
+  return { y: y, total: total };
+}
+function xRange(cums) {                    // depth axis: up to ~the 99.5th percentile
+  let k = 0;
+  cums.forEach((c) => { for (let i = 0; i < c.y.length; i++) if (c.y[i] >= 0.5 && i > k) k = i; });
+  return Math.max(15, Math.ceil(k * 1.15));
+}
+const at = (c, i) => (i < c.y.length ? c.y[i] : 0);
+
+/* ================================================================ overview */
+function overviewGenome(root) {
+  const S = D.samples, R = S.map((s) => BY[s][0]);
+  const k = [{ label: "Samples", value: fi(S.length) }];
+  if (RULE) {
+    const n = R.filter(isOK).length;
+    k.push({ label: "Interpretable", value: n + " / " + S.length, cls: n === S.length ? "ok" : (n === 0 ? "bad" : ""),
+      sub: "\u2265 " + RULE.pct + "% of the genome at \u2265 " + RULE.depth + "X" });
+  }
+  k.push({ label: "Median mean coverage", value: fx(median(R.map((r) => r.mean_coverage)), 2) + "X" });
+  k.push({ label: "Median % mapped", value: fx(median(R.map((r) => r.percentage_mapped)), 2) + "%" });
+  kpis(root, k);
+
+  const two = h("div", { class: "two" }); root.appendChild(two);
+  barChart(panel(two, "Mean coverage per sample", "Mean depth over the analysed genome" + (RULE ? " (colour = interpretability)" : "")), {
+    labels: S, height: 280, yLabel: "mean depth (X)", legend: RULE ? VERDICT_LEGEND : null, fmt: (v) => fx(v, 2) + "X",
+    series: [{ name: "mean coverage", values: R.map((r) => r.mean_coverage), color: "var(--bar)", colors: RULE ? R.map(verdictColor) : null }] });
+  barChart(panel(two, "Reads mapped", "Percentage of mapped reads (from the BAM index)"), {
+    labels: S, height: 280, ymax: 100, yLabel: "% mapped", fmt: (v) => fx(v, 2) + "%",
+    series: [{ name: "% mapped", values: R.map((r) => r.percentage_mapped), color: "var(--bar)" }] });
+
+  const series = DEPTHS.map((d, i) => ({ name: "\u2265 " + d + "X", color: PALETTE[i % PALETTE.length], values: R.map((r) => r[d + "X"]) }));
+  barChart(panel(root, "Breadth of coverage", "Percentage of the genome covered at each depth threshold"), {
+    labels: S, series: series, legend: series, ymax: 100, yLabel: "% of genome", height: 300, fmt: (v) => fx(v, 2) + "%",
+    hlines: RULE ? [{ y: RULE.pct, label: "rule: " + RULE.pct + "% at " + RULE.depth + "X" }] : [] });
+
+  if (HAS_DUP) {
+    section(root, "Duplicates", "Whole-genome sequencing should contain few duplicates; a high rate means low library complexity or over-amplification. "
+      + "Estimated = a primary read with the same start, end, strand and mate position as an earlier read (some can be chance at very high depth). "
+      + "Flagged = marked with the 0x400 flag by a duplicate-marking tool.");
+    const anyMarked = R.some((r) => r.marked_dup_reads > 0);
+    const est = R.map((r) => r.pct_est_dup), hi = R.reduce((a, r) => (r.pct_est_dup > a.pct_est_dup ? r : a), R[0]);
+    kpis(root, [{ label: "Median duplicates (estimated)", value: fx(median(est), 2) + "%" },
+      { label: "Highest duplicates", value: fx(hi.pct_est_dup, 2) + "%", sub: hi.sample },
+      { label: "Flagged in the BAMs", value: anyMarked ? fi(R.reduce((a, r) => a + r.marked_dup_reads, 0)) : "none", sub: anyMarked ? "reads with the 0x400 flag" : "no duplicate-marking was run" }]);
+    const dser = [{ name: "estimated from alignments", color: PALETTE[0], values: est }];
+    if (anyMarked) dser.push({ name: "flagged in the BAM (0x400)", color: PALETTE[1], values: R.map((r) => r.pct_marked_dup) });
+    const two3 = h("div", { class: "two" }); root.appendChild(two3);
+    barChart(panel(two3, "Duplicate rate", "Percentage of primary mapped reads that are duplicates"), {
+      labels: S, series: dser, legend: dser.length > 1 ? dser : null, yLabel: "% of reads", height: 280, fmt: (v) => fx(v, 2) + "%" });
+    const cser = [{ name: "all reads", color: PALETTE[0], values: R.map((r) => r.mean_coverage) },
+      { name: "without duplicates", color: PALETTE[1], values: R.map((r) => r.mean_coverage_nodup) }];
+    barChart(panel(two3, "Mean coverage with and without duplicates", "Depth lost if duplicates were removed"), {
+      labels: S, series: cser, legend: cser, yLabel: "mean depth (X)", height: 280, fmt: (v) => fx(v, 2) + "X" });
+    const drows = R.map((r) => ({ sample: r.sample, reads: r.primary_mapped_reads, est: r.est_dup_reads, pest: r.pct_est_dup, mark: r.marked_dup_reads,
+      pmark: r.pct_marked_dup, cov: r.mean_coverage, cnd: r.mean_coverage_nodup,
+      lost: r.mean_coverage > 0 ? (r.mean_coverage - r.mean_coverage_nodup) / r.mean_coverage * 100 : 0 }));
+    dataTable(panel(root, "Duplicates per sample", "Click a header to sort."), { rows: drows, maxHeight: 360, filename: "fastbamqc_duplicates", noRuleSuffix: true,
+      columns: [{ key: "sample", label: "sample", help: "Sample name (BAM file name without extension).", type: "str" }, { key: "reads", label: "primary_mapped_reads", help: "Primary mapped reads: mapped alignments that are neither secondary nor supplementary. Denominator of the duplicate percentages.", type: "num" },
+        { key: "est", label: "est_dup_reads", help: "Reads estimated to be duplicates from the alignments alone: same start, end, strand and mate position as an earlier read (a duplicated pair counts as 2). Conservative: samtools markdup finds somewhat more.", type: "num" }, { key: "pest", label: "pct_est_dup", help: "est_dup_reads as a percentage of the primary mapped reads. High values mean low library complexity (low input, WGA or over-amplification).", type: "num", digits: 2 },
+        { key: "mark", label: "marked_dup_reads", help: "Reads carrying the duplicate flag (0x400) in the BAM, i.e. already marked by Picard MarkDuplicates, samtools markdup... 0 means no marking was run, not that there are no duplicates.", type: "num" }, { key: "pmark", label: "pct_marked_dup", help: "marked_dup_reads as a percentage of the primary mapped reads.", type: "num", digits: 2 },
+        { key: "cov", label: "mean_coverage", help: "Mean depth over the analysed genome, all reads included.", type: "num", digits: 2 }, { key: "cnd", label: "mean_coverage_nodup", help: "Mean depth if the duplicate reads (flagged or estimated) were removed: the depth that is really informative.", type: "num", digits: 2 },
+        { key: "lost", label: "coverage_lost_pct", help: "Share of the mean depth brought by duplicates: (mean_coverage - mean_coverage_nodup) / mean_coverage x 100.", type: "num", digits: 2 }] });
+  }
+  if (SHAPE.length) {
+    const two4 = h("div", { class: "two" }); root.appendChild(two4);
+    barChart(panel(two4, "Evenness: positions above 0.2 \u00d7 mean", "Percentage of positions with depth \u2265 0.2 \u00d7 the sample mean (higher = more even)"), {
+      labels: S, ymax: 100, yLabel: "% of positions", height: 260, fmt: (v) => fx(v, 2) + "%",
+      series: [{ name: "above 0.2 x mean", values: R.map((r) => r["pct_above_0.2_mean"]), color: "var(--bar)" }] });
+    barChart(panel(two4, "Evenness: fold 80 penalty", "Mean depth divided by the depth reached by 80% of positions (1 = perfectly even, lower is better)"), {
+      labels: S, yLabel: "fold 80", height: 260, fmt: (v) => fx(v, 2),
+      series: [{ name: "fold 80", values: R.map((r) => r.fold_80), color: "var(--bar)" }] });
+  }
+
+  const curves = [];
+  S.forEach((s, i) => { const d = detail(s); if (d && d.hist) curves.push(Object.assign({ name: s, color: PALETTE[i % PALETTE.length] }, cumulative(d.hist))); });
+  if (curves.length) {
+    const xm = Math.min(xRange(curves), XCAP);
+    lineChart(panel(root, "Coverage curves", "Percentage of the genome covered at a depth of at least X, for every sample"), {
+      series: curves.map((c) => { const x = [], y = []; for (let i = 0; i <= xm; i++) { x.push(i); y.push(at(c, i)); } return { name: c.name, color: c.color, x: x, y: y }; }),
+      legend: curves.length <= 12 ? curves : null, xmax: xm, ymax: 100, xLabel: "depth (X)", yLabel: "% of genome \u2265 depth", height: 320,
+      yTip: (v) => fx(v, 2) + "%",
+      hlines: RULE ? [{ y: RULE.pct, label: RULE.pct + "%" }] : [], vlines: RULE && RULE.depth <= xm ? [{ x: RULE.depth, label: RULE.depth + "X" }] : [] });
+  }
+}
+
+function overviewAmplicon(root) {
+  const S = D.samples, n = GENE_ROWS.length;
+  const k = [{ label: "Samples", value: fi(S.length) }, { label: "Targets", value: fi(n), sub: "genes / amplicons per sample" }];
+  if (RULE) {
+    const tot = ROWS.length, ok = ROWS.filter(isOK).length;
+    k.push({ label: "Interpretable", value: fx(tot ? ok / tot * 100 : 0, 1) + "%", sub: fi(ok) + " of " + fi(tot) + " sample/target pairs",
+      cls: ok === tot ? "ok" : (ok === 0 ? "bad" : "") });
+  }
+  k.push({ label: "Median mean coverage", value: fx(median(ROWS.map((r) => r.mean_coverage)), 1) + "X" });
+  kpis(root, k);
+
+  // ---- heatmap targets x samples, with a metric selector
+  const metrics = ["mean_coverage"].concat(DEPTHS.map((d) => d + "X"), ["reads", "percentage_of_mapped"], SHAPE);
+  if (RULE && metrics.indexOf(RULE_COL) < 0) metrics.push(RULE_COL);
+  if (RULE) metrics.unshift("interpretability");
+  if (!ST.ovMetric || metrics.indexOf(ST.ovMetric) < 0) ST.ovMetric = RULE ? "interpretability" : "mean_coverage";
+  const hostH = panel(root, "Targets x samples", "One cell per target and sample. Hover a cell for its values.",
+    h("div", { class: "ctrl" }, ["Metric ", select(metrics.map((m) => ({ value: m, label: m === "interpretability" ? "interpretability (verdict)" : m })), ST.ovMetric, (v) => { ST.ovMetric = v; drawHeat(); })]));
+  const legendHost = h("div"); hostH.parentNode.appendChild(legendHost);
+  function drawHeat() {
+    const m = ST.ovMetric, cell = (g, j) => BY[S[j]][g] || null;
+    let max = 1;
+    if (m !== "interpretability") ROWS.forEach((r) => { if (r[m] > max) max = r[m]; });
+    const isPct = /^\d+X$/.test(m), t = (v) => (isPct ? v / 100 : Math.log1p(v) / Math.log1p(max));
+    legendHost.innerHTML = "";
+    if (m === "interpretability") legendHost.appendChild(legendEl(VERDICT_LEGEND));
+    else legendHost.appendChild(h("div", { class: "ramp" }, [h("span", { text: "0" }),
+      h("b", { style: "background:linear-gradient(90deg," + [0, 0.33, 0.66, 1].map(ramp).join(",") + ")" }),
+      h("span", { text: fnum(isPct ? 100 : Math.round(max * 10) / 10) + (isPct ? "%" : "") + (isPct ? "" : "  (log scale)") })]));
+    heatmap(hostH, {
+      rows: GENE_LABELS, cols: S,
+      value: (g, j) => { const r = cell(g, j); return r ? r[m] : null; },
+      color: (v, g, j) => (m === "interpretability" ? verdictColor(cell(g, j)) : (v == null ? "var(--grid)" : ramp(t(v)))),
+      textColor: (v) => (m !== "interpretability" && v != null && t(v) > 0.55 ? "#ffffff" : "var(--ink)"),
+      text: (v) => (m === "interpretability" || v == null ? null : (isPct ? String(Math.round(v)) : (v >= 100 ? String(Math.round(v)) : fx(v, 1)))),
+      tip: (g, j, v) => GENE_LABELS[g] + "  /  " + S[j] + "\n" + m + ": " + (m === "interpretability" ? v : fnum(v)) + (m !== "interpretability" && RULE && cell(g, j) ? "\n" + cell(g, j).interpretability : "") });
+  }
+  drawHeat();
+
+  // ---- per-sample and per-target summaries
+  const two = h("div", { class: "two" }); root.appendChild(two);
+  if (RULE) {
+    barChart(panel(two, "Interpretable targets per sample", "Percentage of targets that are INTERPRETABLE in each sample"), {
+      labels: S, ymax: 100, yLabel: "% of targets", height: 280, fmt: (v) => fx(v, 1) + "%",
+      series: [{ name: "interpretable", color: "var(--ok)", values: S.map((s) => BY[s].length ? BY[s].filter(isOK).length / BY[s].length * 100 : 0) }] });
+  } else {
+    barChart(panel(two, "Mean coverage per sample", "Average of the target mean coverages"), {
+      labels: S, yLabel: "mean depth (X)", height: 280, fmt: (v) => fx(v, 1) + "X",
+      series: [{ name: "mean", color: "var(--bar)", values: S.map((s) => BY[s].length ? sum(BY[s].map((r) => r.mean_coverage)) / BY[s].length : 0) }] });
+  }
+  const perGene = GENE_ROWS.map((_, g) => BY && S.map((s) => BY[s][g]).filter(Boolean));
+  const med = perGene.map((a) => median(a.map((r) => r.mean_coverage)));
+  barChart(panel(two, "Mean coverage per target", "Median across samples (bar) and min\u2013max (whiskers), in target order"), {
+    labels: GENE_LABELS, height: 280, yLabel: "mean depth (X)", fmt: (v, s, i) => "median " + fx(v, 1) + "X  (min " + fx(Math.min.apply(null, perGene[i].map((r) => r.mean_coverage)), 1) + ", max " + fx(Math.max.apply(null, perGene[i].map((r) => r.mean_coverage)), 1) + ")",
+    series: [{ name: "median", color: "var(--bar)", values: med }],
+    range: { lo: perGene.map((a) => Math.min.apply(null, a.map((r) => r.mean_coverage))), hi: perGene.map((a) => Math.max.apply(null, a.map((r) => r.mean_coverage))) } });
+  if (RULE) {
+    const rate = perGene.map((a) => (a.length ? a.filter(isOK).length / a.length * 100 : 0));
+    const order = rate.map((_, i) => i).sort((a, b) => rate[a] - rate[b]);
+    barChart(panel(root, "Interpretability rate per target", "Percentage of samples in which each target is INTERPRETABLE, weakest first (green \u2265 90%, amber 50\u201390%, red < 50%)"), {
+      labels: order.map((i) => GENE_LABELS[i]), ymax: 100, yLabel: "% of samples", height: 300, fmt: (v) => fx(v, 1) + "%",
+      series: [{ name: "rate", values: order.map((i) => rate[i]), color: "var(--bar)", colors: order.map((i) => (rate[i] >= 90 ? "var(--ok)" : rate[i] >= 50 ? "var(--warn)" : "var(--bad)")) }] });
+  }
+}
+
+function renderOverview() {
+  const root = $("tab-overview"); root.innerHTML = "";
+  if (D.failed && D.failed.length) root.appendChild(h("div", { class: "warn", text: "Samples that failed and are NOT in this report: " + D.failed.join(", ") }));
+  if (GENOME) overviewGenome(root); else overviewAmplicon(root);
+  dataTable(panel(root, "All results", "Every row of the main output table. Click a header to sort."), { columns: colsFor(false), rows: ROWS, filename: "fastbamqc_all_results", maxHeight: 520 });
+  ST.dirty.overview = false;
+}
+
+/* ============================================================ sample pages */
+function breadthSeries(r) {
+  return [{ name: "% covered", color: "var(--bar)", values: DEPTHS.map((d) => r[d + "X"]),
+    colors: RULE ? DEPTHS.map((d) => (d === RULE.depth ? (isOK(r) ? "var(--ok)" : "var(--bad)") : "var(--bar)")) : null }];
+}
+function sampleGenome(root, s) {
+  const r = BY[s][0], d = detail(s);
+  const k = [{ label: "Total reads", value: fi(r.total_read) },
+    { label: "Mapped reads", value: fi(r.mapped_read), sub: fx(r.percentage_mapped, 2) + "% of all reads" },
+    { label: "Mean coverage", value: fx(r.mean_coverage, 2) + "X" }];
+  if (HAS_DUP) {
+    k.push({ label: "Duplicates (estimated)", value: fx(r.pct_est_dup, 2) + "%",
+      sub: fi(r.marked_dup_reads) + " flagged in the BAM (" + fx(r.pct_marked_dup, 2) + "%)" });
+    k.push({ label: "Coverage without duplicates", value: fx(r.mean_coverage_nodup, 2) + "X", sub: "mean depth, duplicates removed" });
+  }
+  if (SHAPE.length) k.push({ label: "Fold 80", value: fx(r.fold_80, 2), sub: fx(r["pct_above_0.2_mean"], 2) + "% of positions above 0.2 \u00d7 mean" });
+  if (RULE) k.push({ label: "Interpretability", value: r.interpretability, cls: isOK(r) ? "ok" : "bad",
+    sub: fx(r[RULE_COL], 2) + "% of the genome at \u2265 " + RULE.depth + "X (rule: " + RULE.pct + "%)" });
+  kpis(root, k);
+
+  const two = h("div", { class: "two" }); root.appendChild(two);
+  kvTable(panel(two, "Metrics", "As written in the output table"), activeCols().filter((c) => c !== "sample").map((c) => [c, r[c]]));
+  barChart(panel(two, "Breadth of coverage", "Percentage of the genome covered at each depth threshold" + (RULE ? " (rule threshold coloured)" : "")), {
+    labels: DEPTHS.map((x) => "\u2265 " + x + "X"), series: breadthSeries(r), ymax: 100, yLabel: "% of genome", height: 260,
+    fmt: (v) => fx(v, 2) + "%", hlines: RULE ? [{ y: RULE.pct, label: "rule: " + RULE.pct + "%" }] : [] });
+
+  if (d && d.hist) {
+    const cum = cumulative(d.hist), xm = xRange([cum]), xmc = Math.min(xm, XCAP), total = cum.total;
+    const hx = [], hy = [], cx = [], cy = [];
+    for (let i = 0; i <= xm; i++) { if (i <= xmc) { cx.push(i); cy.push(at(cum, i)); } if (i >= 1) { hx.push(i); hy.push((i < d.hist.length ? d.hist[i] : 0) / total * 100); } }
+    const two2 = h("div", { class: "two" }); root.appendChild(two2);
+    lineChart(panel(two2, "Depth distribution", "Percentage of positions at each depth. Depth 0: " + fx(d.hist[0] / total * 100, 2) + "% of positions (not drawn)."), {
+      series: [{ name: "positions", x: hx, y: hy, color: "var(--bar)", step: true, fill: true }], xmax: xm + 1, height: 280,
+      xLabel: "depth (X)", yLabel: "% of positions", yTip: (v) => fx(v, 3) + "%",
+      vlines: RULE ? [{ x: RULE.depth, label: RULE.depth + "X" }] : [] });
+    lineChart(panel(two2, "Coverage curve", "Percentage of positions covered at a depth of at least X"), {
+      series: [{ name: "% \u2265 depth", x: cx, y: cy, color: "var(--accent)", fill: true }], xmax: xmc, ymax: 100, height: 280,
+      xLabel: "depth (X)", yLabel: "% of positions \u2265 depth", yTip: (v) => fx(v, 2) + "%",
+      hlines: RULE ? [{ y: RULE.pct, label: RULE.pct + "%" }] : [], vlines: RULE && RULE.depth <= xmc ? [{ x: RULE.depth, label: RULE.depth + "X" }] : [] });
+  }
+  if (d && d.contigs && d.contigs.length) {
+    const cs = d.contigs, note = d.n_contigs > cs.length ? "Showing the " + cs.length + " largest of " + d.n_contigs + " contigs." : "All " + cs.length + " contigs.";
+    barChart(panel(root, "Mean depth per contig", note), {
+      labels: cs.map((c) => c.name), height: 300, yLabel: "mean depth (X)", fmt: (v, _s, i) => fx(v, 2) + "X  (" + fi(cs[i].length) + " bp)",
+      series: [{ name: "mean depth", values: cs.map((c) => c.mean), color: "var(--bar)" }] });
+    const rows = cs.map((c) => { const o = Object.assign({}, c); DEPTHS.forEach((x, i) => { o["p" + i] = c.pct[i]; }); return o; });
+    dataTable(panel(root, "Per-contig metrics", note), { rows: rows, maxHeight: 360, filename: "fastbamqc_" + s + "_contigs",
+      columns: [{ key: "name", label: "contig", type: "str" }, { key: "length", label: "length", type: "num" }, { key: "mapped", label: "mapped_reads", type: "num" },
+        { key: "mean", label: "mean_coverage", type: "num", digits: 2 }].concat(DEPTHS.map((x, i) => ({ key: "p" + i, label: x + "X", type: "num", digits: 2 }))) });
+  }
+  if (HAS_DUP) {
+    section(root, "Duplicates and read breakdown", "Estimated duplicates share start, end, strand and mate position with an earlier read; flagged ones carry the 0x400 flag.");
+    const tot = r.primary_mapped_reads || 0, p = (n) => (tot ? n / tot * 100 : 0);
+    const items = [["estimated duplicates", r.est_dup_reads], ["flagged duplicates", r.marked_dup_reads]];
+    barChart(panel(root, "Duplicates", "Reads (percentage of primary mapped reads in the tooltip)"), {
+      labels: items.map((x) => x[0]), height: 220, yLabel: "% of primary mapped reads", fmt: (v, _s, i) => fx(v, 2) + "%  (" + fi(items[i][1]) + " reads)",
+      series: [{ name: "reads", values: items.map((x) => p(x[1])), color: "var(--bar)" }] });
+    kvTable(panel(root, "Read breakdown", "Counts over mapped alignments"), [["primary mapped reads", r.primary_mapped_reads], ["properly paired (%)", r.pct_properly_paired],
+      ["MAPQ 0 (%)", r.pct_mapq0], ["secondary", r.secondary_reads], ["supplementary", r.supplementary_reads], ["QC-fail", r.qcfail_reads],
+      ["flagged duplicates", r.marked_dup_reads], ["estimated duplicates", r.est_dup_reads], ["mean coverage", r.mean_coverage], ["mean coverage without duplicates", r.mean_coverage_nodup]]);
+  }
+}
+
+function sampleAmplicon(root, s) {
+  const rows = BY[s], d = detail(s), n = rows.length;
+  const low = rows.reduce((a, r) => (a === null || r.mean_coverage < a.mean_coverage ? r : a), null);
+  const k = [{ label: "Targets", value: fi(n) }];
+  if (RULE) { const ok = rows.filter(isOK).length; k.push({ label: "Interpretable", value: ok + " / " + n, cls: ok === n ? "ok" : (ok === 0 ? "bad" : ""), sub: "\u2265 " + RULE.pct + "% of the target at \u2265 " + RULE.depth + "X" }); }
+  k.push({ label: "Median mean coverage", value: fx(median(rows.map((r) => r.mean_coverage)), 1) + "X" });
+  if (low) k.push({ label: "Lowest coverage", value: fx(low.mean_coverage, 1) + "X", sub: low.gene });
+  kpis(root, k);
+
+  dataTable(panel(root, "Targets", "Results for this sample, one row per target. Click a header to sort."), { columns: colsFor(true), rows: rows, maxHeight: 400, filename: "fastbamqc_" + s });
+
+  // ---- bar chart per target, with a metric selector
+  const metrics = ["mean_coverage"].concat(DEPTHS.map((x) => x + "X"), ["reads", "percentage_of_mapped"], SHAPE);
+  if (RULE && metrics.indexOf(RULE_COL) < 0) metrics.push(RULE_COL);
+  if (!ST.geneMetric || metrics.indexOf(ST.geneMetric) < 0) ST.geneMetric = RULE ? RULE_COL : "mean_coverage";
+  const hostB = panel(root, "Metric per target", RULE ? "Colour = interpretability. Dashed line = interpretability rule when the metric allows it." : "One bar per target, in BED order.",
+    h("div", { class: "ctrl" }, ["Metric ", select(metrics.map((m) => ({ value: m, label: m })), ST.geneMetric, (v) => { ST.geneMetric = v; drawBars(); })]));
+  function drawBars() {
+    const m = ST.geneMetric, isPct = /^\d+X$/.test(m), hl = [];
+    if (RULE && m === RULE_COL) hl.push({ y: RULE.pct, label: "rule: " + RULE.pct + "%" });
+    if (RULE && m === "mean_coverage") hl.push({ y: RULE.depth, label: "rule depth: " + RULE.depth + "X" });
+    barChart(hostB, { labels: GENE_LABELS, height: 320, yLabel: m, ymax: isPct ? 100 : null, hlines: hl, legend: RULE ? VERDICT_LEGEND : null,
+      fmt: (v, _s, i) => fnum(v) + (isPct ? "%" : "") + (RULE && rows[i] ? "\n" + rows[i].interpretability : ""),
+      series: [{ name: m, values: rows.map((r) => r[m]), color: "var(--bar)", colors: RULE ? rows.map(verdictColor) : null }] });
+  }
+  drawBars();
+
+  // ---- depth profiles: one large + a gallery of small multiples
+  if (!d || !d.profiles || !d.profiles.length) return;
+  const P = d.profiles;
+  if (ST.gene >= P.length) ST.gene = 0;
+  const bigInfo = h("p", { class: "sub" });
+  const ctl = h("div", { class: "ctrl" }, ["Target ", select(P.map((p, i) => ({ value: i, label: GENE_LABELS[i] || p.gene })), ST.gene, (v) => { ST.gene = parseInt(v, 10); drawBig(); markSel(); }),
+    checkbox("Shared y-axis", ST.shared, (c) => { ST.shared = c; drawBig(); drawMinis(); }), checkbox("Log scale", ST.log, (c) => { ST.log = c; drawBig(); drawMinis(); })]);
+  const bigHost = panel(root, "Depth profile", "Depth along the selected target (position within the target; dotted lines join separate regions of the same target).", ctl);
+  bigHost.parentNode.insertBefore(bigInfo, bigHost);
+  const bigChart = h("div"); bigHost.appendChild(bigChart);
+  const sharedMax = Math.max.apply(null, P.map((p) => Math.max.apply(null, p.depth.concat([0]))).concat([RULE ? RULE.depth : 1]));
+  const sel = ctl.querySelector("select");
+  function drawBig() {
+    const p = P[ST.gene], r = rows[ST.gene], binned = p.depth.length < p.length;
+    bigInfo.textContent = (GENE_LABELS[ST.gene] || p.gene) + "  |  " + (r ? r.chrom + ":" + r.start + "-" + r.end + "  |  mean " + fx(r.mean_coverage, 1) + "X" + (RULE ? "  |  " + fx(r[RULE_COL], 2) + "% at \u2265 " + RULE.depth + "X  |  " + r.interpretability : "") : "") + (binned ? "  |  binned: " + p.depth.length + " points" : "");
+    const xs = p.depth.map((_, i) => (i + 0.5) * p.length / p.depth.length);
+    lineChart(bigChart, { series: [{ name: "depth", x: xs, y: p.depth, color: r && RULE ? verdictColor(r) : "var(--bar)", fill: true }], xmax: p.length, ymax: ST.shared ? sharedMax : null, ylog: ST.log,
+      height: 300, xLabel: "position in target (bp)", yLabel: "depth (X)", yTip: (v) => fx(v, 1) + "X",
+      hlines: RULE ? [{ y: RULE.depth, label: "\u2265 " + RULE.depth + "X" }] : [], vlines: p.breaks.map((b) => ({ x: b * p.length, color: "var(--muted)" })) });
+  }
+  const gallery = h("div", { class: "minis" });
+  const galHost = panel(root, "All targets", "Small depth profiles of every target in this sample. Click one to open it above.");
+  galHost.appendChild(gallery);
+  function markSel() { Array.prototype.forEach.call(gallery.children, (c, i) => { c.className = "mini" + (i === ST.gene ? " sel" : ""); }); sel.value = String(ST.gene); }
+  function drawMinis() {
+    gallery.innerHTML = "";
+    P.forEach((p, i) => {
+      const r = rows[i], ymax = ST.shared ? sharedMax : Math.max.apply(null, p.depth.concat([RULE ? RULE.depth : 1]));
+      const card = h("div", { class: "mini" }, [h("div", { class: "mt" }, [h("span", { text: GENE_LABELS[i] || p.gene }), r && RULE ? pillFor(r.interpretability) : h("span", { text: r ? fx(r.mean_coverage, 0) + "X" : "" })]),
+        spark(p, ymax, RULE ? RULE.depth : 0, ST.log, r && RULE ? verdictColor(r) : "var(--bar)", 200, 64)]);
+      tipOn(card, () => (GENE_LABELS[i] || p.gene) + (r ? "\nmean " + fx(r.mean_coverage, 1) + "X" + (RULE ? "\n" + fx(r[RULE_COL], 2) + "% at \u2265 " + RULE.depth + "X" : "") : ""));
+      card.addEventListener("click", () => { ST.gene = i; drawBig(); markSel(); if (bigHost.scrollIntoView) bigHost.scrollIntoView({ block: "center" }); });
+      gallery.appendChild(card);
+    });
+    markSel();
+  }
+  drawBig(); drawMinis();
+}
+
+function renderSample() {
+  const root = $("sample-body"); root.innerHTML = "";
+  if (!ST.sample) return;
+  if (GENOME) sampleGenome(root, ST.sample); else sampleAmplicon(root, ST.sample);
+  ST.dirty.sample = false;
+}
+
+/* ============================================================ app / events */
+const ST = { tab: "overview", sample: D.samples[0], ovMetric: null, geneMetric: null, gene: 0, shared: true, log: false, dirty: { overview: true, sample: true } };
+
+function renderActive() { if (ST.tab === "overview") renderOverview(); else renderSample(); }
+function showTab(t) {
+  ST.tab = t;
+  ["overview", "sample"].forEach((x) => {
+    $("tab-" + x).hidden = x !== t;
+    document.querySelector('[data-tab="' + x + '"]').classList.toggle("on", x === t);
+  });
+  if (ST.dirty[t]) renderActive();
+  hideTip();
+}
+function setSample(name, keepTab) {
+  if (!(name in IDX)) return;
+  ST.sample = name; ST.gene = 0; $("sel").value = name;
+  try { history.replaceState(null, "", "#sample=" + encodeURIComponent(name)); } catch (e) { /* file:// or sandbox */ }
+  if (!keepTab) showTab("sample"); else renderSample();
+}
+function step(delta) { setSample(D.samples[(IDX[ST.sample] + delta + D.samples.length) % D.samples.length], true); }
+
+function ruleText() { return "Interpretable: \u2265 " + RULE.pct + "% at \u2265 " + RULE.depth + "X"; }
+function setupRule() {
+  if (!RULE) return;
+  const chip = $("rulechip"); chip.textContent = ruleText();
+  if (!GRID) return;                       // no precomputed grid: the rule stays fixed
+  document.querySelector("header.top").classList.add("hasrule");
+  $("rulebox").hidden = false;
+  const xs = GRID.x, sx = $("rx"), sp = $("rp"), vx = $("rxv"), vp = $("rpv"), rst = $("rrs"), note = $("rnote");
+  sx.min = 0; sx.max = xs.length - 1; sx.step = 1; sx.value = xs.indexOf(RULE.depth);
+  sp.min = 0; sp.max = 100; sp.step = 0.5; sp.value = RULE.pct;
+  let queued = false;
+  function show() {
+    vx.textContent = RULE.depth + "X"; vp.textContent = +RULE.pct.toFixed(2) + "%";
+    chip.textContent = ruleText();
+    const same = RULE.depth === RULE0.depth && RULE.pct === RULE0.pct;
+    rst.disabled = same;
+    note.textContent = same ? "Initial values. Drag to re-evaluate live."
+      : "Modified (initial: \u2265 " + RULE0.pct + "% at \u2265 " + RULE0.depth + "X)";
+    note.title = same ? "Values of the command line. Move the sliders to re-evaluate every result live; the tables and CSV downloads follow."
+      : "Modified from the command line values (\u2265 " + RULE0.pct + "% at \u2265 " + RULE0.depth + "X). Tables and CSV downloads use the modified values.";
+  }
+  function refresh() {                     // redraw once per frame, keeping the scroll position
+    show();
+    if (queued) return; queued = true;
+    requestAnimationFrame(() => {
+      queued = false; const y = window.scrollY;
+      ST.dirty.overview = ST.dirty.sample = true; renderActive(); window.scrollTo(0, y); hideTip();
+    });
+  }
+  sx.addEventListener("input", () => { applyRule(xs[+sx.value], RULE.pct); refresh(); });
+  sp.addEventListener("input", () => { applyRule(RULE.depth, parseFloat(sp.value)); refresh(); });
+  rst.addEventListener("click", () => { applyRule(RULE0.depth, RULE0.pct); sx.value = xs.indexOf(RULE0.depth); sp.value = RULE0.pct; refresh(); });
+  show();
+}
+
+function boot() {
+  $("title").textContent = D.title; $("ver").textContent = "v" + D.version;
+  [D.mode === "genome" ? "Whole genome" : "Amplicon / panel", D.samples.length + " sample" + (D.samples.length > 1 ? "s" : ""),
+    RULE ? "" : null, D.generated].forEach((t) => { if (t === null || t === undefined) return; const c = h("span", { class: "chip", text: t }); if (t === "") c.id = "rulechip"; $("chips").appendChild(c); });
+  setupRule();
+  const sel = $("sel");
+  D.samples.forEach((s) => sel.appendChild(h("option", { value: s, text: s })));
+  sel.addEventListener("change", () => setSample(sel.value, true));
+  $("prev").addEventListener("click", () => step(-1)); $("next").addEventListener("click", () => step(1));
+  document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.getAttribute("data-tab"))));
+  const foot = $("foot");
+  foot.appendChild(h("div", { text: "Generated by fastbamqc v" + D.version + " on " + D.generated + ". Command:" }));
+  foot.appendChild(h("code", { text: D.command }));
+  const pk = Object.keys(D.params || {});
+  if (pk.length) foot.appendChild(h("div", { text: pk.map((k) => k + " = " + D.params[k]).join("   |   ") }));
+  let m = null; try { m = /^#sample=(.+)$/.exec(location.hash); } catch (e) { m = null; }
+  if (m && decodeURIComponent(m[1]) in IDX) { ST.sample = decodeURIComponent(m[1]); sel.value = ST.sample; showTab("sample"); }
+  else showTab("overview");
+  let timer = null;
+  window.addEventListener("resize", () => { clearTimeout(timer); timer = setTimeout(() => { ST.dirty.overview = ST.dirty.sample = true; renderActive(); }, 200); });
+}
+boot();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fastbamqc"
+version = "0.3.0"
+description = "Fast mapping and depth QC metrics for sorted, indexed BAM files (whole genome or amplicon/panel)"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["pysam>=0.21", "numpy>=1.21"]
+
+[project.optional-dependencies]
+xlsx = ["openpyxl>=3.0"]
+
+[project.scripts]
+fastbamqc = "fastbamqc.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+fastbamqc = ["templates/*.html"]
