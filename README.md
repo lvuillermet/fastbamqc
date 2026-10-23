@@ -3,6 +3,44 @@
 Fast mapping and depth metrics (percentage mapped, mean depth, percentage of positions covered at >= X)
 for coordinate-sorted and indexed BAM files. Works on whole genomes and on amplicon / panel data.
 
+
+
+
+
+
+# Installer de 0 :
+```bash
+sudo apt install python3-venv python3-full
+```
+
+Puis, à la racine du projet (créer env):
+
+```bash
+python3 -m venv .venv
+```
+
+Activer l'env :
+
+```bash
+source .venv/bin/activate
+```
+Finalement, installer l'outil:
+```bash
+pip install -e .
+```
+
+Peut être installé dans un env micromamba, ... puis l'outil `fastbamqc` est disponible
+
+
+
+
+
+
+
+
+
+
+
 ## Installation
     pip install .            # or: pip install -e .  (development: code changes are picked up immediately)
     pip install ".[xlsx]"    # + Excel export
@@ -151,25 +189,3 @@ Notes:
 
 
 
-# Installer de 0 :
-```bash
-sudo apt install python3-venv python3-full
-```
-
-Puis, à la racine du projet (créer env):
-
-```bash
-python3 -m venv .venv
-```
-
-Activer l'env :
-
-```bash
-source .venv/bin/activate
-```
-Finalement, installer l'outil:
-```bash
-pip install -e .
-```
-
-Peut être installé dans un env micromamba, ... puis l'outil `fastbamqc` est disponible
