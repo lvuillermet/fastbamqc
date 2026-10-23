@@ -357,6 +357,13 @@ def parse_args(argv=None):
                    help="Minimum percentage of the region (or of the genome) that must reach "
                         "--interp-depth (default: 75). The decision uses the 2-decimal value "
                         "shown in the table.")
+    g.add_argument("--interp-nodup", action="store_true",
+                   help="Whole genome only. By default the rule uses the depth of ALL reads. "
+                        "With this option duplicate reads (flagged 0x400 or estimated from the "
+                        "alignments) are left out: the rule reads new columns <d>X_nodup "
+                        "(breadth of coverage without duplicates), added next to the <d>X "
+                        "columns. Useful for libraries with many duplicates (WGA, low input). "
+                        "Slower (about +50-60%%: every read is checked for duplication).")
     g.add_argument("--no-interp", action="store_true",
                    help="Do not compute the interpretability column (and no rule sliders in "
                         "the report).")
@@ -425,6 +432,13 @@ def main(argv=None):
     if args.same_gene and not args.bed:
         log.error("--same-gene only makes sense together with --bed")
         return 2
+    if args.interp_nodup and args.bed:
+        log.error("--interp-nodup is only available in whole-genome mode (without --bed): "
+                  "duplicates are expected in amplicon data")
+        return 2
+    if args.interp_nodup and args.no_interp:
+        log.error("--interp-nodup cannot be combined with --no-interp")
+        return 2
     if args.no_interp and (args.interp_depth is not None or args.interp_pct is not None):
         log.error("--no-interp cannot be combined with --interp-depth / --interp-pct")
         return 2
@@ -438,7 +452,7 @@ def main(argv=None):
         if not 0 < interp_pct <= 100:
             log.error("--interp-pct must be a percentage in ]0, 100]")
             return 2
-        interp = (interp_depth, interp_pct)
+        interp = (interp_depth, interp_pct, bool(args.interp_nodup))
         if interp_depth not in args.depths:        # the verdict needs this <d>X column
             depths = sorted(set(args.depths) | {interp_depth})
             log.info("Depth threshold %dX added to the depth columns "
@@ -478,7 +492,8 @@ def main(argv=None):
         log.info("Whole-genome mode")
     if interp:
         log.info("Interpretability rule: INTERPRETABLE if at least %g%% of the region "
-                 "is covered at >= %dX", interp[1], interp[0])
+                 "is covered at >= %dX%s", interp[1], interp[0],
+                 " (duplicate reads left out)" if interp[2] else "")
 
     # --- Parallelism: N BAM files at a time, each with T threads ---
     jobs = max(1, min(args.max_cores // args.threads_per_bam, len(bams)))
@@ -496,6 +511,8 @@ def main(argv=None):
                  "for the duplicates section")
     if targets is None:
         kwargs["read_stats"] = read_stats
+        if args.interp_nodup:
+            kwargs["nodup"] = True
     grid_xs = make_grid(list(depths) + ([interp[0]] if interp else [])) if (args.report and interp) else None
     if grid_xs:                              # the report sliders need the exact % at every grid depth
         kwargs["grid_xs"] = grid_xs
@@ -528,7 +545,8 @@ def main(argv=None):
         return 1
     columns = output_columns(depths, targeted=targets is not None,
                              interpretability=interp is not None,
-                             uniformity=args.uniformity, read_stats=read_stats)
+                             uniformity=args.uniformity, read_stats=read_stats,
+                             nodup=args.interp_nodup)
     fmt = args.out_format
     samples = sorted(results)
     os.makedirs(args.out_dir, exist_ok=True)
@@ -566,12 +584,13 @@ def main(argv=None):
                 mode="amplicon" if targets is not None else "genome",
                 columns=columns, rows=all_rows, samples=samples, details=details,
                 depths=depths,
-                interp={"depth": interp[0], "pct": interp[1]} if interp else None,
+                interp={"depth": interp[0], "pct": interp[1], "nodup": interp[2]} if interp else None,
                 grid=grid,
                 params={k: v for k, v in {
                     "pattern": args.pattern, "min_mapq": args.min_mapq,
                     "exclude_flags": args.exclude_flags,
                     "read_stats": True if read_stats else None,
+                    "interp_nodup": True if args.interp_nodup else None,
                     "uniformity": True if args.uniformity else None,
                     "bed": os.path.basename(args.bed) if args.bed else None,
                     "same_gene": (args.same_gene or "merge") if args.bed else None,

@@ -113,7 +113,7 @@ footer code{background:var(--card);border:1px solid var(--line);border-radius:6p
   <h1 id="title"></h1>
   <div class="chips" id="chips"></div>
   <div class="rulebox" id="rulebox" hidden>
-    <div class="rt"><span>Interpretability rule</span><button type="button" class="btn rst" id="rrs" title="Back to the values given on the command line">reset</button></div>
+    <div class="rt"><span id="rtitle">Interpretability rule</span><button type="button" class="btn rst" id="rrs" title="Back to the values given on the command line">reset</button></div>
     <label>Depth &ge; <input type="range" id="rx" aria-label="Minimum depth (X)"><output id="rxv"></output></label>
     <label>Covered &ge; <input type="range" id="rp" aria-label="Minimum percentage of the region covered"><output id="rpv"></output></label>
     <div class="note" id="rnote"></div>
@@ -148,7 +148,11 @@ const D = JSON.parse($("report-data").textContent);
 const PALETTE = ["#4f86f0", "#e8743b", "#19a979", "#945ecf", "#e8a317", "#13a4b4", "#d9534f", "#6f7f95"];
 const FONT = "font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif";
 const COLS = D.columns, DEPTHS = D.depths, RULE = D.interp, GENOME = D.mode === "genome";
-let RULE_COL = RULE ? RULE.depth + "X" : null;
+const NODUP = !!(RULE && RULE.nodup);                                       // rule evaluated without the duplicate reads
+const ruleCol = (depth) => depth + (NODUP ? "X_nodup" : "X");
+const bcol = (d) => d + (NODUP ? "X_nodup" : "X");                         // breadth-of-coverage column shown in charts
+const histOf = (d) => (d ? (NODUP && d.hist_nd ? d.hist_nd : d.hist) : null);
+let RULE_COL = RULE ? ruleCol(RULE.depth) : null;
 const RULE0 = RULE ? { depth: RULE.depth, pct: RULE.pct } : null;          // values given on the command line
 const GRID = RULE && D.grid && D.grid.rows && D.grid.rows.length === D.rows.length ? D.grid : null;
 const XCAP = Math.max.apply(null, [200].concat(DEPTHS));                   // max depth (X) of the coverage curves
@@ -170,9 +174,9 @@ function activeCols() {                    // table columns: the rule depth colu
   if (RULE && c.indexOf(RULE_COL) < 0) { const i = c.indexOf("interpretability"); c.splice(i < 0 ? c.length : i, 0, RULE_COL); }
   return c;
 }
-function ruleSuffix() { return RULE ? "_" + RULE.depth + "X_" + RULE.pct + "pct" : ""; }
+function ruleSuffix() { return RULE ? "_" + RULE.depth + "X_" + RULE.pct + "pct" + (NODUP ? "_nodup" : "") : ""; }
 function applyRule(depth, pct) {           // recompute the depth column and the verdict of every row
-  RULE.depth = depth; RULE.pct = pct; RULE_COL = depth + "X";
+  RULE.depth = depth; RULE.pct = pct; RULE_COL = ruleCol(depth);
   const gi = GRID ? GRID.x.indexOf(depth) : -1, native = COLS.indexOf(RULE_COL) >= 0;
   ROWS.forEach((r, i) => {
     if (!native) r[RULE_COL] = gi >= 0 ? GRID.rows[i][gi] / 100 : null;
@@ -348,7 +352,7 @@ function barChart(host, o) {
   const svg = sv("svg", { width: r1(svgW), height: H, viewBox: "0 0 " + r1(svgW) + " " + H, style: FONT + ";display:block", role: "img" });
   ax.ticks.forEach((t) => {
     svg.appendChild(sv("line", { x1: ML, x2: ML + innerW, y1: r1(Y(t)), y2: r1(Y(t)), style: "stroke:var(--grid)" }));
-    svg.appendChild(T(ML - 6, Y(t) + 4, tickLabel(t), { anchor: "end" }));
+    svg.appendChild(T(ML - 6, Y(t) + 4, tickLabel(t) + (o.yUnit || ""), { anchor: "end" }));
   });
   if (o.yLabel) svg.appendChild(T(12, MT + innerH / 2, o.yLabel, { anchor: "middle", rot: -90 }));
   const bw = Math.min(46, slot * 0.72 / ns);
@@ -500,7 +504,7 @@ function spark(p, ymax, thr, log, color, w, hh) {   // small depth profile (ampl
 /* ================================================================== tables */
 const SHAPE = ["median_coverage", "cv_coverage", "pct_above_0.2_mean", "fold_80"].filter((c) => COLS.indexOf(c) >= 0);
 const HAS_DUP = COLS.indexOf("pct_est_dup") >= 0;
-function dig(c) { return (/^\d+X$/.test(c) || c === "mean_coverage" || c === "mean_coverage_nodup" || c.indexOf("percentage") === 0 || c.indexOf("pct_") === 0 || SHAPE.indexOf(c) >= 0) ? 2 : null; }
+function dig(c) { return (/^\d+X(_nodup)?$/.test(c) || c === "mean_coverage" || c === "mean_coverage_nodup" || c.indexOf("percentage") === 0 || c.indexOf("pct_") === 0 || SHAPE.indexOf(c) >= 0) ? 2 : null; }
 function colsFor(noSample) {
   return activeCols().filter((c) => !(noSample && c === "sample")).map((c) => ({
     key: c, label: c, digits: dig(c),
@@ -516,7 +520,7 @@ function dataTable(host, o) {
   o.columns.forEach((c) => {
     const th = h("th", { text: c.label });
     if (c.help) {                                  // small "?" with an explanation on hover
-      const q = h("span", { class: "qm", text: "?", title: c.help });
+      const q = h("span", { class: "qm", text: "?", "aria-label": c.help });
       tipOn(q, wrapText(c.help, 52));
       q.addEventListener("click", (e) => e.stopPropagation());   // do not sort when clicking the "?"
       th.appendChild(q);
@@ -599,7 +603,7 @@ function overviewGenome(root) {
   if (RULE) {
     const n = R.filter(isOK).length;
     k.push({ label: "Interpretable", value: n + " / " + S.length, cls: n === S.length ? "ok" : (n === 0 ? "bad" : ""),
-      sub: "\u2265 " + RULE.pct + "% of the genome at \u2265 " + RULE.depth + "X" });
+      sub: "\u2265 " + RULE.pct + "% of the genome at \u2265 " + RULE.depth + "X" + (NODUP ? ", duplicates removed" : "") });
   }
   k.push({ label: "Median mean coverage", value: fx(median(R.map((r) => r.mean_coverage)), 2) + "X" });
   k.push({ label: "Median % mapped", value: fx(median(R.map((r) => r.percentage_mapped)), 2) + "%" });
@@ -613,8 +617,8 @@ function overviewGenome(root) {
     labels: S, height: 280, ymax: 100, yLabel: "% mapped", fmt: (v) => fx(v, 2) + "%",
     series: [{ name: "% mapped", values: R.map((r) => r.percentage_mapped), color: "var(--bar)" }] });
 
-  const series = DEPTHS.map((d, i) => ({ name: "\u2265 " + d + "X", color: PALETTE[i % PALETTE.length], values: R.map((r) => r[d + "X"]) }));
-  barChart(panel(root, "Breadth of coverage", "Percentage of the genome covered at each depth threshold"), {
+  const series = DEPTHS.map((d, i) => ({ name: "\u2265 " + d + "X", color: PALETTE[i % PALETTE.length], values: R.map((r) => r[bcol(d)]) }));
+  barChart(panel(root, "Breadth of coverage", "Percentage of the genome covered at each depth threshold" + (NODUP ? " (duplicates removed)" : "")), {
     labels: S, series: series, legend: series, ymax: 100, yLabel: "% of genome", height: 300, fmt: (v) => fx(v, 2) + "%",
     hlines: RULE ? [{ y: RULE.pct, label: "rule: " + RULE.pct + "% at " + RULE.depth + "X" }] : [] });
 
@@ -640,7 +644,7 @@ function overviewGenome(root) {
       pmark: r.pct_marked_dup, cov: r.mean_coverage, cnd: r.mean_coverage_nodup,
       lost: r.mean_coverage > 0 ? (r.mean_coverage - r.mean_coverage_nodup) / r.mean_coverage * 100 : 0 }));
     dataTable(panel(root, "Duplicates per sample", "Click a header to sort."), { rows: drows, maxHeight: 360, filename: "fastbamqc_duplicates", noRuleSuffix: true,
-      columns: [{ key: "sample", label: "sample", help: "Sample name (BAM file name without extension).", type: "str" }, { key: "reads", label: "primary_mapped_reads", help: "Primary mapped reads: mapped alignments that are neither secondary nor supplementary. Denominator of the duplicate percentages.", type: "num" },
+      columns: [{ key: "sample", label: "sample", type: "str" }, { key: "reads", label: "primary_mapped_reads", help: "Primary mapped reads: mapped alignments that are neither secondary nor supplementary. Denominator of the duplicate percentages.", type: "num" },
         { key: "est", label: "est_dup_reads", help: "Reads estimated to be duplicates from the alignments alone: same start, end, strand and mate position as an earlier read (a duplicated pair counts as 2). Conservative: samtools markdup finds somewhat more.", type: "num" }, { key: "pest", label: "pct_est_dup", help: "est_dup_reads as a percentage of the primary mapped reads. High values mean low library complexity (low input, WGA or over-amplification).", type: "num", digits: 2 },
         { key: "mark", label: "marked_dup_reads", help: "Reads carrying the duplicate flag (0x400) in the BAM, i.e. already marked by Picard MarkDuplicates, samtools markdup... 0 means no marking was run, not that there are no duplicates.", type: "num" }, { key: "pmark", label: "pct_marked_dup", help: "marked_dup_reads as a percentage of the primary mapped reads.", type: "num", digits: 2 },
         { key: "cov", label: "mean_coverage", help: "Mean depth over the analysed genome, all reads included.", type: "num", digits: 2 }, { key: "cnd", label: "mean_coverage_nodup", help: "Mean depth if the duplicate reads (flagged or estimated) were removed: the depth that is really informative.", type: "num", digits: 2 },
@@ -657,10 +661,10 @@ function overviewGenome(root) {
   }
 
   const curves = [];
-  S.forEach((s, i) => { const d = detail(s); if (d && d.hist) curves.push(Object.assign({ name: s, color: PALETTE[i % PALETTE.length] }, cumulative(d.hist))); });
+  S.forEach((s, i) => { const d = detail(s); if (d && d.hist) curves.push(Object.assign({ name: s, color: PALETTE[i % PALETTE.length] }, cumulative(histOf(d)))); });
   if (curves.length) {
     const xm = Math.min(xRange(curves), XCAP);
-    lineChart(panel(root, "Coverage curves", "Percentage of the genome covered at a depth of at least X, for every sample"), {
+    lineChart(panel(root, "Coverage curves", "Percentage of the genome covered at a depth of at least X, for every sample" + (NODUP ? " (duplicates removed)" : "")), {
       series: curves.map((c) => { const x = [], y = []; for (let i = 0; i <= xm; i++) { x.push(i); y.push(at(c, i)); } return { name: c.name, color: c.color, x: x, y: y }; }),
       legend: curves.length <= 12 ? curves : null, xmax: xm, ymax: 100, xLabel: "depth (X)", yLabel: "% of genome \u2265 depth", height: 320,
       yTip: (v) => fx(v, 2) + "%",
@@ -691,7 +695,7 @@ function overviewAmplicon(root) {
     const m = ST.ovMetric, cell = (g, j) => BY[S[j]][g] || null;
     let max = 1;
     if (m !== "interpretability") ROWS.forEach((r) => { if (r[m] > max) max = r[m]; });
-    const isPct = /^\d+X$/.test(m), t = (v) => (isPct ? v / 100 : Math.log1p(v) / Math.log1p(max));
+    const isPct = /^\d+X(_nodup)?$/.test(m), t = (v) => (isPct ? v / 100 : Math.log1p(v) / Math.log1p(max));
     legendHost.innerHTML = "";
     if (m === "interpretability") legendHost.appendChild(legendEl(VERDICT_LEGEND));
     else legendHost.appendChild(h("div", { class: "ramp" }, [h("span", { text: "0" }),
@@ -743,7 +747,7 @@ function renderOverview() {
 
 /* ============================================================ sample pages */
 function breadthSeries(r) {
-  return [{ name: "% covered", color: "var(--bar)", values: DEPTHS.map((d) => r[d + "X"]),
+  return [{ name: "% covered", color: "var(--bar)", values: DEPTHS.map((d) => r[bcol(d)]),
     colors: RULE ? DEPTHS.map((d) => (d === RULE.depth ? (isOK(r) ? "var(--ok)" : "var(--bad)") : "var(--bar)")) : null }];
 }
 function sampleGenome(root, s) {
@@ -758,21 +762,21 @@ function sampleGenome(root, s) {
   }
   if (SHAPE.length) k.push({ label: "Fold 80", value: fx(r.fold_80, 2), sub: fx(r["pct_above_0.2_mean"], 2) + "% of positions above 0.2 \u00d7 mean" });
   if (RULE) k.push({ label: "Interpretability", value: r.interpretability, cls: isOK(r) ? "ok" : "bad",
-    sub: fx(r[RULE_COL], 2) + "% of the genome at \u2265 " + RULE.depth + "X (rule: " + RULE.pct + "%)" });
+    sub: fx(r[RULE_COL], 2) + "% of the genome at \u2265 " + RULE.depth + "X" + (NODUP ? " without duplicates" : "") + " (rule: " + RULE.pct + "%)" });
   kpis(root, k);
 
   const two = h("div", { class: "two" }); root.appendChild(two);
   kvTable(panel(two, "Metrics", "As written in the output table"), activeCols().filter((c) => c !== "sample").map((c) => [c, r[c]]));
-  barChart(panel(two, "Breadth of coverage", "Percentage of the genome covered at each depth threshold" + (RULE ? " (rule threshold coloured)" : "")), {
+  barChart(panel(two, "Breadth of coverage", "Percentage of the genome covered at each depth threshold" + (NODUP ? ", duplicates removed" : "") + (RULE ? " (rule threshold coloured)" : "")), {
     labels: DEPTHS.map((x) => "\u2265 " + x + "X"), series: breadthSeries(r), ymax: 100, yLabel: "% of genome", height: 260,
     fmt: (v) => fx(v, 2) + "%", hlines: RULE ? [{ y: RULE.pct, label: "rule: " + RULE.pct + "%" }] : [] });
 
   if (d && d.hist) {
-    const cum = cumulative(d.hist), xm = xRange([cum]), xmc = Math.min(xm, XCAP), total = cum.total;
+    const H0 = histOf(d), cum = cumulative(H0), xm = xRange([cum]), xmc = Math.min(xm, XCAP), total = cum.total;
     const hx = [], hy = [], cx = [], cy = [];
-    for (let i = 0; i <= xm; i++) { if (i <= xmc) { cx.push(i); cy.push(at(cum, i)); } if (i >= 1) { hx.push(i); hy.push((i < d.hist.length ? d.hist[i] : 0) / total * 100); } }
+    for (let i = 0; i <= xm; i++) { if (i <= xmc) { cx.push(i); cy.push(at(cum, i)); } if (i >= 1) { hx.push(i); hy.push((i < H0.length ? H0[i] : 0) / total * 100); } }
     const two2 = h("div", { class: "two" }); root.appendChild(two2);
-    lineChart(panel(two2, "Depth distribution", "Percentage of positions at each depth. Depth 0: " + fx(d.hist[0] / total * 100, 2) + "% of positions (not drawn)."), {
+    lineChart(panel(two2, "Depth distribution", "Percentage of positions at each depth. Depth 0: " + fx(H0[0] / total * 100, 2) + "% of positions (not drawn)." + (NODUP ? " Duplicates removed." : "")), {
       series: [{ name: "positions", x: hx, y: hy, color: "var(--bar)", step: true, fill: true }], xmax: xm + 1, height: 280,
       xLabel: "depth (X)", yLabel: "% of positions", yTip: (v) => fx(v, 3) + "%",
       vlines: RULE ? [{ x: RULE.depth, label: RULE.depth + "X" }] : [] });
@@ -782,7 +786,7 @@ function sampleGenome(root, s) {
       hlines: RULE ? [{ y: RULE.pct, label: RULE.pct + "%" }] : [], vlines: RULE && RULE.depth <= xmc ? [{ x: RULE.depth, label: RULE.depth + "X" }] : [] });
   }
   if (d && d.contigs && d.contigs.length) {
-    const cs = d.contigs, note = d.n_contigs > cs.length ? "Showing the " + cs.length + " largest of " + d.n_contigs + " contigs." : "All " + cs.length + " contigs.";
+    const cs = d.contigs, note = d.n_contigs > cs.length ? "Showing the " + cs.length + " largest of " + d.n_contigs + " contigs." : "All " + cs.length + " contigs." + (NODUP ? " Per-contig values include the duplicates." : "");
     barChart(panel(root, "Mean depth per contig", note), {
       labels: cs.map((c) => c.name), height: 300, yLabel: "mean depth (X)", fmt: (v, _s, i) => fx(v, 2) + "X  (" + fi(cs[i].length) + " bp)",
       series: [{ name: "mean depth", values: cs.map((c) => c.mean), color: "var(--bar)" }] });
@@ -822,10 +826,11 @@ function sampleAmplicon(root, s) {
   const hostB = panel(root, "Metric per target", RULE ? "Colour = interpretability. Dashed line = interpretability rule when the metric allows it." : "One bar per target, in BED order.",
     h("div", { class: "ctrl" }, ["Metric ", select(metrics.map((m) => ({ value: m, label: m })), ST.geneMetric, (v) => { ST.geneMetric = v; drawBars(); })]));
   function drawBars() {
-    const m = ST.geneMetric, isPct = /^\d+X$/.test(m), hl = [];
+    const m = ST.geneMetric, isPct = /^\d+X(_nodup)?$/.test(m), hl = [];
     if (RULE && m === RULE_COL) hl.push({ y: RULE.pct, label: "rule: " + RULE.pct + "%" });
     if (RULE && m === "mean_coverage") hl.push({ y: RULE.depth, label: "rule depth: " + RULE.depth + "X" });
-    barChart(hostB, { labels: GENE_LABELS, height: 320, yLabel: m, ymax: isPct ? 100 : null, hlines: hl, legend: RULE ? VERDICT_LEGEND : null,
+    barChart(hostB, { labels: GENE_LABELS, height: 320, yLabel: isPct ? "% of the target covered at \u2265 " + m.replace("_nodup", "") : m, yUnit: isPct ? "%" : "",
+      ymax: isPct ? 100 : null, hlines: hl, legend: RULE ? VERDICT_LEGEND : null,
       fmt: (v, _s, i) => fnum(v) + (isPct ? "%" : "") + (RULE && rows[i] ? "\n" + rows[i].interpretability : ""),
       series: [{ name: m, values: rows.map((r) => r[m]), color: "var(--bar)", colors: RULE ? rows.map(verdictColor) : null }] });
   }
@@ -898,10 +903,11 @@ function setSample(name, keepTab) {
 }
 function step(delta) { setSample(D.samples[(IDX[ST.sample] + delta + D.samples.length) % D.samples.length], true); }
 
-function ruleText() { return "Interpretable: \u2265 " + RULE.pct + "% at \u2265 " + RULE.depth + "X"; }
+function ruleText() { return "Interpretable: \u2265 " + RULE.pct + "% at \u2265 " + RULE.depth + "X" + (NODUP ? " (no duplicates)" : ""); }
 function setupRule() {
   if (!RULE) return;
   const chip = $("rulechip"); chip.textContent = ruleText();
+  if (NODUP) $("rtitle").textContent = "Interpretability rule \u00b7 no duplicates";
   if (!GRID) return;                       // no precomputed grid: the rule stays fixed
   document.querySelector("header.top").classList.add("hasrule");
   $("rulebox").hidden = false;

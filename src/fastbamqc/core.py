@@ -80,7 +80,7 @@ NOT_INTERPRETABLE = "NON_INTERPRETABLE"
 
 
 def output_columns(depths, targeted=False, interpretability=False,
-                   uniformity=False, read_stats=False):
+                   uniformity=False, read_stats=False, nodup=False):
     """Column names of the final table (depends on the thresholds and on the mode)."""
     if targeted:      # amplicon / panel: 1 row per target
         base = ["sample", "gene", "chrom", "start", "end", "length", "n_regions",
@@ -89,6 +89,8 @@ def output_columns(depths, targeted=False, interpretability=False,
         base = ["sample", "total_read", "mapped_read", "percentage_mapped",
                 "mean_coverage"]
     cols = base + [f"{d}X" for d in depths]
+    if nodup and not targeted:                # --interp-nodup: same thresholds, duplicates removed
+        cols += [f"{d}X_nodup" for d in depths]
     if uniformity:                            # optional: shape of the depth distribution
         cols += SHAPE_COLUMNS
     if read_stats and not targeted:           # optional: read-level QC (whole genome only)
@@ -98,15 +100,22 @@ def output_columns(depths, targeted=False, interpretability=False,
     return cols
 
 
-def interpretability_label(row, depth, min_pct):
+def rule_column(depth, nodup=False):
+    """Name of the column the interpretability rule reads: `<d>X`, or `<d>X_nodup`."""
+    return f"{depth}X_nodup" if nodup else f"{depth}X"
+
+
+def interpretability_label(row, depth, min_pct, nodup=False):
     """
     INTERPRETABLE if at least `min_pct` percent of the region (the whole genome,
     or one target) is covered at >= `depth` X, NON_INTERPRETABLE otherwise.
 
     The decision uses the value of the `<depth>X` column exactly as written in
     the table (2 decimals), so anyone can re-check it from the output file.
+    nodup=True (--interp-nodup): the `<depth>X_nodup` column is used, i.e. the depth
+    obtained without the duplicate reads.
     """
-    return INTERPRETABLE if row[f"{depth}X"] >= min_pct else NOT_INTERPRETABLE
+    return INTERPRETABLE if row[rule_column(depth, nodup)] >= min_pct else NOT_INTERPRETABLE
 
 
 # ----------------------------------------------------------------------------
@@ -200,11 +209,11 @@ def missing_contigs(targets, references):
 # Depth
 # ----------------------------------------------------------------------------
 def _chunk_coverage(bam, chrom, start, end, min_mapq, exclude_flags, count_floor,
-                    read_stats=False):
+                    read_stats=False, nodup=False):
     """
     Depth at every position of [start, end) on `chrom`.
     Returns (numpy array of size end-start or None if no read, number of reads,
-    read statistics or None).
+    read statistics or None, depth without duplicates or None).
 
     `count_floor` prevents counting the same read in several windows: a read
     is only counted here if it starts at or after `count_floor`; otherwise it
@@ -216,10 +225,14 @@ def _chunk_coverage(bam, chrom, start, end, min_mapq, exclude_flags, count_floor
     template length) is identical to that of an earlier read: reads of a
     coordinate-sorted BAM that start at the same position are consecutive, so
     only the keys of the current start position are kept in memory.
+
+    nodup=True (needs read_stats=True) also builds the depth WITHOUT the duplicate
+    reads (flagged 0x400 or estimated): the fourth returned value, None when no read is left.
     """
     # array('q') = compact 64-bit integers (~5x less RAM than a Python list,
     # important for amplicons sequenced at several thousand X)
     starts, ends = array("q"), array("q")
+    starts_nd, ends_nd = array("q"), array("q")     # same, without the duplicate reads
     n_reads = 0
     st = [0] * N_STATS if read_stats else None
     cur_start, seen = -1, set()
@@ -245,7 +258,7 @@ def _chunk_coverage(bam, chrom, start, end, min_mapq, exclude_flags, count_floor
                     est = True
                 else:
                     seen.add(key)
-                dup = marked or est
+            dup = marked or est               # the 0x400 flag also applies to secondary/supplementary
             if counted:
                 st[S_SCANNED] += 1
                 if flag & FLAG_QCFAIL:
@@ -286,20 +299,30 @@ def _chunk_coverage(bam, chrom, start, end, min_mapq, exclude_flags, count_floor
                 n_reads += 1
             if dup:                           # bases brought by duplicates (for mean_coverage_nodup)
                 st[S_DUPLEN] += r_end - r_start
+            elif nodup:
+                starts_nd.append(r_start - start)
+                ends_nd.append(r_end - start)
 
     if not starts:
-        return None, 0, st
+        return None, 0, st, None
 
     size = end - start
+    return _depth_from_intervals(starts, ends, size), n_reads, st, \
+        (_depth_from_intervals(starts_nd, ends_nd, size) if starts_nd else None)
+
+
+def _depth_from_intervals(starts, ends, size):
+    """Depth per position from read starts/ends (relative to the window; end exclusive)."""
     # +1 at every read start, -1 at every read end (end is exclusive, as in pysam)
     diff = (np.bincount(np.frombuffer(starts, dtype=np.int64), minlength=size + 1)
             - np.bincount(np.frombuffer(ends, dtype=np.int64), minlength=size + 1))
     # The cumulative sum turns the +1/-1 into depth per position
-    return np.cumsum(diff[:size]), n_reads, st
+    return np.cumsum(diff[:size])
 
 
 def _scan_intervals(bam, intervals, mapped_per_contig, depths, min_mapq, exclude_flags,
-                    hist_cap=None, profile=False, read_stats=False, want_sq=False):
+                    hist_cap=None, profile=False, read_stats=False, want_sq=False,
+                    nodup=False):
     """
     Accumulates the depth over a set of intervals {contig: [(start, end), ...]}
     (sorted and disjoint per contig). Returns a dict:
@@ -309,6 +332,8 @@ def _scan_intervals(bam, intervals, mapped_per_contig, depths, min_mapq, exclude
         n_ge       {threshold: number of positions with depth >= threshold}
         sum_sq     (if want_sq) sum of the squared depths (for the coefficient of variation)
         stats      (if read_stats) list of read counters (see _chunk_coverage)
+        n_ge_nd    (if nodup) like n_ge, without the duplicate reads (flagged or estimated)
+        hist_nd    (if nodup and hist_cap) like hist, without the duplicate reads
         hist       (if hist_cap) numpy array: positions per depth value 0..hist_cap
         profile    (if profile)  numpy array: depth at every position, intervals concatenated
     """
@@ -316,6 +341,8 @@ def _scan_intervals(bam, intervals, mapped_per_contig, depths, min_mapq, exclude
     stats = [0] * N_STATS if read_stats else None
     n_ge = {d: 0 for d in depths}
     hist = np.zeros(hist_cap + 1, dtype=np.int64) if hist_cap else None
+    n_ge_nd = {d: 0 for d in depths} if nodup else None
+    hist_nd = np.zeros(hist_cap + 1, dtype=np.int64) if (nodup and hist_cap) else None
     pieces = [] if profile else None
 
     for chrom, ivs in intervals.items():
@@ -325,6 +352,8 @@ def _scan_intervals(bam, intervals, mapped_per_contig, depths, min_mapq, exclude
             # nothing to read (saves time on empty contigs): every position is at 0X
             if hist is not None:
                 hist[0] += span
+                if hist_nd is not None:
+                    hist_nd[0] += span
             if pieces is not None:
                 pieces.append(np.zeros(span, dtype=np.int32))
             continue
@@ -334,8 +363,8 @@ def _scan_intervals(bam, intervals, mapped_per_contig, depths, min_mapq, exclude
             floor = prev_end
             for w_start in range(r_start, r_end, CHUNK_SIZE):
                 w_end = min(w_start + CHUNK_SIZE, r_end)
-                cov, n, st = _chunk_coverage(bam, chrom, w_start, w_end, min_mapq,
-                                             exclude_flags, floor, read_stats)
+                cov, n, st, cov_nd = _chunk_coverage(bam, chrom, w_start, w_end, min_mapq,
+                                                     exclude_flags, floor, read_stats, nodup)
                 floor = w_end             # a read starting earlier was already counted
                 n_reads += n
                 if st is not None:
@@ -344,9 +373,20 @@ def _scan_intervals(bam, intervals, mapped_per_contig, depths, min_mapq, exclude
                 if cov is None:           # window without any read: all positions at 0X
                     if hist is not None:
                         hist[0] += w_end - w_start
+                        if hist_nd is not None:
+                            hist_nd[0] += w_end - w_start
                     if pieces is not None:
                         pieces.append(np.zeros(w_end - w_start, dtype=np.int32))
                     continue
+                if nodup:                 # window without any unique read: every position at 0X
+                    if cov_nd is None:
+                        if hist_nd is not None:
+                            hist_nd[0] += w_end - w_start
+                    else:
+                        for d in depths:
+                            n_ge_nd[d] += int(np.count_nonzero(cov_nd >= d))
+                        if hist_nd is not None:
+                            hist_nd += np.bincount(np.minimum(cov_nd, hist_cap), minlength=hist_cap + 1)
                 sum_depth += int(cov.sum())
                 if want_sq:
                     sum_sq += int(np.dot(cov, cov))
@@ -360,6 +400,7 @@ def _scan_intervals(bam, intervals, mapped_per_contig, depths, min_mapq, exclude
 
     return {"length": target_len, "sum_depth": sum_depth, "reads": n_reads, "n_ge": n_ge,
             "hist": hist, "sum_sq": sum_sq, "stats": stats,
+            "n_ge_nd": n_ge_nd, "hist_nd": hist_nd,
             "profile": np.concatenate(pieces) if pieces else None}
 
 
@@ -453,7 +494,7 @@ def _open_indexed(bam_path, threads):
 # ----------------------------------------------------------------------------
 def analyze_bam(bam_path, depths=(1, 5, 10), threads=1, min_mapq=0,
                 exclude_flags=0, contigs=None, detail=False,
-                uniformity=False, read_stats=False, grid_xs=None):
+                uniformity=False, read_stats=False, grid_xs=None, nodup=False):
     """
     Analyses a sorted AND indexed BAM over the whole genome.
     Returns (result, detail): `result` is a dict of metrics; `detail` is None, or
@@ -466,6 +507,9 @@ def analyze_bam(bam_path, depths=(1, 5, 10), threads=1, min_mapq=0,
     - mean_coverage and <d>X: computed over the size of ALL selected contigs,
       including those without any read.
     - uniformity=True : adds the SHAPE_COLUMNS (median, CV, uniformity, fold_80);
+    - nodup=True      : (--interp-nodup) also computes the `<d>X_nodup` columns: breadth of
+      coverage once the duplicate reads (flagged or estimated) are removed; the report
+      grid and depth histogram then describe the depth without duplicates too.
     - read_stats=True : adds the READ_STATS_COLUMNS (flags, duplicates...). These are
       computed over the reads of the selected contigs, independently of the
       min_mapq / exclude_flags filters (only `mean_coverage_nodup` depends on them).
@@ -495,23 +539,29 @@ def analyze_bam(bam_path, depths=(1, 5, 10), threads=1, min_mapq=0,
         n_ge = {d: 0 for d in depths}
         need_hist = detail or uniformity or bool(grid_xs)
         hist = np.zeros(HIST_CAP + 1, dtype=np.int64) if need_hist else None
+        hist_nd = np.zeros(HIST_CAP + 1, dtype=np.int64) if (need_hist and nodup) else None
+        n_ge_nd = {d: 0 for d in depths}
         sum_sq = 0
         stats = [0] * N_STATS
         per_contig = []
         for group in groups:
             r = _scan_intervals(bam, group, mapped_per_contig, depths, min_mapq,
                                 exclude_flags, hist_cap=HIST_CAP if need_hist else None,
-                                read_stats=read_stats, want_sq=uniformity)
+                                read_stats=read_stats or nodup, want_sq=uniformity, nodup=nodup)
             target_len += r["length"]
             sum_depth += r["sum_depth"]
             sum_sq += r["sum_sq"]
-            if read_stats:
+            if read_stats or nodup:
                 for i, v in enumerate(r["stats"]):
                     stats[i] += v
             for d in depths:
                 n_ge[d] += r["n_ge"][d]
+                if nodup:
+                    n_ge_nd[d] += r["n_ge_nd"][d]
             if need_hist:
                 hist += r["hist"]
+                if nodup:
+                    hist_nd += r["hist_nd"]
             if detail:
                 chrom = next(iter(group))
                 per_contig.append({
@@ -531,6 +581,9 @@ def analyze_bam(bam_path, depths=(1, 5, 10), threads=1, min_mapq=0,
     }
     for d in depths:
         result[f"{d}X"] = round(n_ge[d] / target_len * 100, 2)
+    if nodup:
+        for d in depths:
+            result[f"{d}X_nodup"] = round(n_ge_nd[d] / target_len * 100, 2)
     if uniformity:
         result.update(depth_shape(hist, target_len, sum_depth, sum_sq, cap=HIST_CAP))
     if read_stats:
@@ -548,8 +601,11 @@ def analyze_bam(bam_path, depths=(1, 5, 10), threads=1, min_mapq=0,
             "n_contigs": len(per_contig),
             "contigs": [per_contig[i] for i in keep],
         }
+        if nodup:                             # depth histogram without the duplicate reads
+            nz = np.flatnonzero(hist_nd)
+            detail_out["hist_nd"] = hist_nd[: (int(nz[-1]) + 1 if len(nz) else 1)].tolist()
         if grid_xs:                           # % of the genome at >= x X, for the report sliders
-            detail_out["grid"] = _grid_from_hist(hist, target_len, grid_xs)
+            detail_out["grid"] = _grid_from_hist(hist_nd if nodup else hist, target_len, grid_xs)
     return result, detail_out
 
 

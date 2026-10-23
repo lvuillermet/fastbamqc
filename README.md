@@ -8,6 +8,10 @@ for coordinate-sorted and indexed BAM files. Works on whole genomes and on ampli
 
 
 
+
+
+
+
 # Installer de 0 :
 ```bash
 sudo apt install python3-venv python3-full
@@ -30,8 +34,6 @@ pip install -e .
 ```
 
 Peut être installé dans un env micromamba, ... puis l'outil `fastbamqc` est disponible
-
-
 
 
 
@@ -70,6 +72,14 @@ A row is `INTERPRETABLE` when at least `--interp-pct` percent of its region (the
 at least `--interp-depth` reads, and `NON_INTERPRETABLE` otherwise.
 
 - `--interp-depth` and `--interp-pct` are independent: the one you omit keeps its default (10X / 75%).
+- `--interp-nodup` (whole genome only): by default the rule uses the depth of **all** reads. With this option
+  duplicate reads (flagged 0x400 **or** estimated from the alignments, see `--read-stats`) are left out. The
+  table gets the columns `<d>X_nodup` (breadth of coverage without duplicates, one per depth threshold) and the
+  rule reads `<interp-depth>X_nodup`. Recommended for libraries with many duplicates (WGA, low input), where
+  the raw depth overstates the usable depth. Cost: every read is checked for duplication (about +50-60% run
+  time on synthetic data; not measured on real BAMs). Not available with `--bed` or `--no-interp`. In the
+  report, the sliders, breadth-of-coverage charts, depth distribution and coverage curves then describe the
+  depth without duplicates (per-contig values still include them) and the CSV file name ends with `_nodup`.
 - `--no-interp` removes the column (and the report sliders); it cannot be combined with the two options above.
 - The depth threshold is added to the `<d>X` columns if it is not already in `--depths`, so the verdict can always be
   re-checked from the table.
@@ -157,7 +167,7 @@ Without a 4th column, the target is named `chrom:start-end`.
 
 Outputs:
 - `<out-dir>/<out-name>.<fmt>`: all rows of all samples (concatenated);
-- `<out-dir>/per_sample/<sample>.amplicons.<fmt>`: one file per sample.,00 H
+- `<out-dir>/per_sample/<sample>.amplicons.<fmt>`: one file per sample.
 
 Columns: `sample, gene, chrom, start, end, length, n_regions, reads, percentage_of_mapped, mean_coverage, <d>X`.
 
@@ -171,21 +181,3 @@ Two different names are never merged, even if they overlap: each gene is compute
 Notes:
 - BED contig names must match the BAM ones (`chr1` vs `1`), otherwise an explicit error is raised.
 - Do NOT exclude duplicates (`--exclude-flags 1024`) on amplicon data: almost all reads are "duplicates" by construction.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

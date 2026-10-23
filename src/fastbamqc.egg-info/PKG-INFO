@@ -144,3 +144,38 @@ Two different names are never merged, even if they overlap: each gene is compute
 Notes:
 - BED contig names must match the BAM ones (`chr1` vs `1`), otherwise an explicit error is raised.
 - Do NOT exclude duplicates (`--exclude-flags 1024`) on amplicon data: almost all reads are "duplicates" by construction.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+sudo apt install python3-venv python3-full
+
+
+
+à la racine du projet (créer env):
+
+python3 -m venv .venv
+
+activer env :
+
+source .venv/bin/activate
+
+puis installer :
+
+pip install -e .
