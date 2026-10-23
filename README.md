@@ -119,7 +119,7 @@ Without a 4th column, the target is named `chrom:start-end`.
 
 Outputs:
 - `<out-dir>/<out-name>.<fmt>`: all rows of all samples (concatenated);
-- `<out-dir>/per_sample/<sample>.amplicons.<fmt>`: one file per sample.
+- `<out-dir>/per_sample/<sample>.amplicons.<fmt>`: one file per sample.,00 H
 
 Columns: `sample, gene, chrom, start, end, length, n_regions, reads, percentage_of_mapped, mean_coverage, <d>X`.
 
@@ -133,3 +133,43 @@ Two different names are never merged, even if they overlap: each gene is compute
 Notes:
 - BED contig names must match the BAM ones (`chr1` vs `1`), otherwise an explicit error is raised.
 - Do NOT exclude duplicates (`--exclude-flags 1024`) on amplicon data: almost all reads are "duplicates" by construction.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Installer de 0 :
+```bash
+sudo apt install python3-venv python3-full
+```
+
+Puis, à la racine du projet (créer env):
+
+```bash
+python3 -m venv .venv
+```
+
+Activer l'env :
+
+```bash
+source .venv/bin/activate
+```
+Finalement, installer l'outil:
+```bash
+pip install -e .
+```
+
+Peut être installé dans un env micromamba, ... puis l'outil `fastbamqc` est disponible
