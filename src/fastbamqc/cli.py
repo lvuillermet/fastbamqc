@@ -17,6 +17,8 @@ import logging
 import os
 import shlex
 import sys
+import multiprocessing
+import multiprocessing.pool
 from multiprocessing import Pool
 
 import pysam
@@ -86,12 +88,30 @@ def _worker(task):
         return sample, None, None, f"{type(exc).__name__}: {exc}"
 
 
-def _run(tasks, jobs):
-    """Iterates over the results as they come in."""
-    if jobs == 1:                            # no Pool: simpler to debug
+class _NoDaemonProcess(multiprocessing.Process):
+    """A process allowed to start its own processes (each BAM then shares its windows)."""
+    @property
+    def daemon(self):
+        return False
+
+    @daemon.setter
+    def daemon(self, value):
+        pass
+
+
+class _NestablePool(multiprocessing.pool.Pool):
+    def __init__(self, *args, **kwargs):
+        kwargs["context"] = type(multiprocessing.get_context())()
+        kwargs["context"].Process = _NoDaemonProcess
+        super().__init__(*args, **kwargs)
+
+
+def _run(tasks, jobs, nested=False):
+    """Iterates over the results as they come in. nested=True: each task starts processes too."""
+    if jobs == 1:                            # no Pool: simpler to debug (a BAM can still use workers)
         yield from map(_worker, tasks)
     else:
-        with Pool(processes=jobs) as pool:
+        with (_NestablePool if nested else Pool)(processes=jobs) as pool:
             yield from pool.imap_unordered(_worker, tasks)
 
 
@@ -384,9 +404,13 @@ def parse_args(argv=None):
     g = p.add_argument_group("performance")
     g.add_argument("-c", "--max-cores", type=int, default=4, metavar="N",
                    help="Total number of CPU cores to use (default: 4).")
-    g.add_argument("-t", "--threads-per-bam", type=int, default=1, metavar="N",
-                   help="Decompression threads per BAM file (default: 1). "
-                        "BAM files processed in parallel = max-cores // threads-per-bam.")
+    g.add_argument("-t", "--threads-per-bam", type=int, default=None, metavar="N",
+                   help="CPU cores used for EACH BAM file (default: automatic). Whole genome: the "
+                        "BAM is cut into windows shared between N processes, so one big file "
+                        "also uses several cores. Amplicon: decompression threads. "
+                        "BAM files processed in parallel = max-cores // threads-per-bam. "
+                        "Automatic: all the cores are shared between the BAM files "
+                        "(1 file -> all cores).")
 
     # --- Other ---
     g = p.add_argument_group("other options")
@@ -419,7 +443,7 @@ def main(argv=None):
     if not os.path.isdir(args.input_dir):
         log.error("Directory not found: %s", args.input_dir)
         return 2
-    if args.max_cores < 1 or args.threads_per_bam < 1:
+    if args.max_cores < 1 or (args.threads_per_bam is not None and args.threads_per_bam < 1):
         log.error("--max-cores and --threads-per-bam must be >= 1")
         return 2
     if args.bed and args.contigs:
@@ -496,12 +520,17 @@ def main(argv=None):
                  " (duplicate reads left out)" if interp[2] else "")
 
     # --- Parallelism: N BAM files at a time, each with T threads ---
-    jobs = max(1, min(args.max_cores // args.threads_per_bam, len(bams)))
-    log.info("%d BAM file(s) found | %d in parallel x %d thread(s)",
-             len(bams), jobs, args.threads_per_bam)
+    if args.threads_per_bam is None:            # automatic: share the cores between the files
+        jobs = max(1, min(len(bams), args.max_cores))
+        per_bam = max(1, args.max_cores // jobs)
+    else:
+        per_bam = min(args.threads_per_bam, args.max_cores)
+        jobs = max(1, min(args.max_cores // per_bam, len(bams)))
+    log.info("%d BAM file(s) found | %d in parallel x %d core(s) each",
+             len(bams), jobs, per_bam)
 
     # Analysis parameters sent to every worker
-    kwargs = dict(depths=depths, threads=args.threads_per_bam,
+    kwargs = dict(depths=depths, threads=1,
                   min_mapq=args.min_mapq, exclude_flags=args.exclude_flags,
                   detail=args.report,       # extra data only needed by the report
                   uniformity=args.uniformity)
@@ -509,6 +538,10 @@ def main(argv=None):
     if args.report and targets is None and not args.read_stats:
         log.info("--report in whole-genome mode: read statistics (duplicates...) enabled "
                  "for the duplicates section")
+    if targets is None:
+        kwargs["workers"] = per_bam           # whole genome: processes sharing the windows of a BAM
+    else:
+        kwargs["threads"] = per_bam           # amplicon: decompression threads
     if targets is None:
         kwargs["read_stats"] = read_stats
         if args.interp_nodup:
@@ -522,7 +555,7 @@ def main(argv=None):
 
     # --- Execution; the parent is the only one writing progress messages ---
     results, details, failed = {}, {}, []    # results: {sample: [rows]}
-    for done, (sample, rows, extra, error) in enumerate(_run(tasks, jobs), start=1):
+    for done, (sample, rows, extra, error) in enumerate(_run(tasks, jobs, nested=per_bam > 1 and targets is None), start=1):
         if error:
             failed.append(sample)
             log.error("[%d/%d] FAILED %s: %s", done, len(bams), sample, error)

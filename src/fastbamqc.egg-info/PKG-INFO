@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: fastbamqc
-Version: 0.3.0
+Version: 0.6.0
 Summary: Fast mapping and depth QC metrics for sorted, indexed BAM files (whole genome or amplicon/panel)
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown
@@ -23,13 +23,22 @@ for coordinate-sorted and indexed BAM files. Works on whole genomes and on ampli
 ## Usage
 Whole genome (one row per sample):
 
-    fastbamqc -i ./bams -f "*_sorted.bam" -o ./results -F tsv -c 16 -t 2
+    fastbamqc -i ./bams -f "*_sorted.bam" -o ./results -F tsv -c 16
 
 Amplicon-seq / panel (one row per gene and per sample):
 
     fastbamqc -i ./bams -f "*_sorted.bam" -o ./results --bed amplicons.bed -d 1,10,30,100,500
 
 `fastbamqc --help` lists all options. BAM files must be sorted and indexed (`samtools index`).
+
+### CPU cores
+`-c N` is the total number of cores to use (default 4). In whole-genome mode a BAM is cut into independent
+windows that are shared between processes, so **one big file also uses several cores**; the totals are exactly
+the same whatever the number of cores. By default (`-t` not given) the cores are shared between the BAM
+files: 1 file -> all the cores, 3 files on 4 cores -> 3 files at the same time. `-t N` fixes the number of
+cores used by each file (files in parallel = `-c // -t`). In amplicon mode `-t` is the number of
+decompression threads per file. Memory grows with the number of processes (about 100-250 MiB each on the
+test data).
 
 ## Interpretability (on by default)
 Every result row (one sample in whole-genome mode, one gene in amplicon mode) gets an extra last column
@@ -43,6 +52,14 @@ A row is `INTERPRETABLE` when at least `--interp-pct` percent of its region (the
 at least `--interp-depth` reads, and `NON_INTERPRETABLE` otherwise.
 
 - `--interp-depth` and `--interp-pct` are independent: the one you omit keeps its default (10X / 75%).
+- `--interp-nodup` (whole genome only): by default the rule uses the depth of **all** reads. With this option
+  duplicate reads (flagged 0x400 **or** estimated from the alignments, see `--read-stats`) are left out. The
+  table gets the columns `<d>X_nodup` (breadth of coverage without duplicates, one per depth threshold) and the
+  rule reads `<interp-depth>X_nodup`. Recommended for libraries with many duplicates (WGA, low input), where
+  the raw depth overstates the usable depth. Cost: every read is checked for duplication (about +50-60% run
+  time on synthetic data; not measured on real BAMs). Not available with `--bed` or `--no-interp`. In the
+  report, the sliders, breadth-of-coverage charts, depth distribution and coverage curves then describe the
+  depth without duplicates (per-contig values still include them) and the CSV file name ends with `_nodup`.
 - `--no-interp` removes the column (and the report sliders); it cannot be combined with the two options above.
 - The depth threshold is added to the `<d>X` columns if it is not already in `--depths`, so the verdict can always be
   re-checked from the table.
@@ -144,38 +161,3 @@ Two different names are never merged, even if they overlap: each gene is compute
 Notes:
 - BED contig names must match the BAM ones (`chr1` vs `1`), otherwise an explicit error is raised.
 - Do NOT exclude duplicates (`--exclude-flags 1024`) on amplicon data: almost all reads are "duplicates" by construction.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-sudo apt install python3-venv python3-full
-
-
-
-à la racine du projet (créer env):
-
-python3 -m venv .venv
-
-activer env :
-
-source .venv/bin/activate
-
-puis installer :
-
-pip install -e .

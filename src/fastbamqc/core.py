@@ -24,6 +24,7 @@ whatever the chromosome size (human chr1 = 250 Mb).
 from __future__ import annotations
 
 import math
+import multiprocessing
 from array import array
 from collections import defaultdict
 
@@ -320,12 +321,125 @@ def _depth_from_intervals(starts, ends, size):
     return np.cumsum(diff[:size])
 
 
+class _Acc:
+    """Running sums of the results of windows (what _scan_window returns)."""
+
+    def __init__(self, depths, hist_cap=None, read_stats=False, want_sq=False, nodup=False, profile=False):
+        self.depths = list(depths)
+        self.length = self.sum_depth = self.reads = self.sum_sq = 0
+        self.n_ge = {d: 0 for d in self.depths}
+        self.stats = [0] * N_STATS if read_stats else None
+        self.hist = np.zeros(hist_cap + 1, dtype=np.int64) if hist_cap else None
+        self.n_ge_nd = {d: 0 for d in self.depths} if nodup else None
+        self.hist_nd = np.zeros(hist_cap + 1, dtype=np.int64) if (nodup and hist_cap) else None
+        self.pieces = [] if profile else None
+
+    def add_empty(self, size):
+        """`size` positions without any read (0X)."""
+        self.length += size
+        if self.hist is not None:
+            self.hist[0] += size
+        if self.hist_nd is not None:
+            self.hist_nd[0] += size
+        if self.pieces is not None:
+            self.pieces.append(np.zeros(size, dtype=np.int32))
+
+    def add(self, p):
+        """Adds the partial result `p` of one window (see _scan_window)."""
+        self.length += p["length"]
+        self.sum_depth += p["sum_depth"]
+        self.sum_sq += p["sum_sq"]
+        self.reads += p["reads"]
+        for d in self.depths:
+            self.n_ge[d] += p["n_ge"][d]
+        if self.stats is not None:
+            for k, v in enumerate(p["stats"]):
+                self.stats[k] += v
+        if self.hist is not None:
+            self.hist += p["hist"]
+        if self.n_ge_nd is not None:
+            for d in self.depths:
+                self.n_ge_nd[d] += p["n_ge_nd"][d]
+            if self.hist_nd is not None:
+                self.hist_nd += p["hist_nd"]
+        if self.pieces is not None:
+            self.pieces.append(p["piece"])
+
+
+def _scan_window(bam, chrom, w_start, w_end, floor, depths, min_mapq, exclude_flags,
+                 hist_cap=None, profile=False, read_stats=False, want_sq=False, nodup=False):
+    """
+    Everything computed for ONE window [w_start, w_end) of a contig: the sums that
+    _Acc.add accumulates. Windows are independent of each other (`floor` makes each
+    read count in one window only), so they can be processed in any order, by
+    different processes, and the totals are exactly the same.
+    """
+    size = w_end - w_start
+    cov, n, st, cov_nd = _chunk_coverage(bam, chrom, w_start, w_end, min_mapq, exclude_flags,
+                                         floor, read_stats, nodup)
+    acc = _Acc(depths, hist_cap, read_stats, want_sq, nodup, profile)
+    acc.reads, acc.length = n, size
+    if st is not None:
+        acc.stats = st
+    if cov is None:                           # window without any read: all positions at 0X
+        if acc.hist is not None:
+            acc.hist[0] += size
+        if acc.hist_nd is not None:
+            acc.hist_nd[0] += size
+        if acc.pieces is not None:
+            acc.pieces.append(np.zeros(size, dtype=np.int32))
+    else:
+        acc.sum_depth = int(cov.sum())
+        if want_sq:
+            acc.sum_sq = int(np.dot(cov, cov))
+        for d in depths:
+            acc.n_ge[d] = int(np.count_nonzero(cov >= d))
+        if acc.hist is not None:
+            acc.hist += np.bincount(np.minimum(cov, hist_cap), minlength=hist_cap + 1)
+        if nodup:
+            if cov_nd is None:
+                if acc.hist_nd is not None:
+                    acc.hist_nd[0] += size
+            else:
+                for d in depths:
+                    acc.n_ge_nd[d] = int(np.count_nonzero(cov_nd >= d))
+                if acc.hist_nd is not None:
+                    acc.hist_nd += np.bincount(np.minimum(cov_nd, hist_cap), minlength=hist_cap + 1)
+        if acc.pieces is not None:
+            acc.pieces.append(cov.astype(np.int32))
+    return {"length": size, "sum_depth": acc.sum_depth, "sum_sq": acc.sum_sq, "reads": n,
+            "n_ge": acc.n_ge, "stats": acc.stats, "hist": acc.hist, "n_ge_nd": acc.n_ge_nd,
+            "hist_nd": acc.hist_nd, "piece": acc.pieces[0] if acc.pieces else None}
+
+
+def _windows(intervals, mapped_per_contig, size=CHUNK_SIZE):
+    """
+    Plan of the windows over {contig: [(start, end), ...]}: a list of
+    (chrom, w_start, w_end, floor) for the contigs that have reads, and the list of
+    (chrom, span) of the empty contigs. `floor` = first position whose reads are counted.
+    """
+    wins, empty = [], []
+    for chrom, ivs in intervals.items():
+        if mapped_per_contig.get(chrom, 0) == 0:
+            empty.append((chrom, sum(e - s for s, e in ivs)))
+            continue
+        prev_end = 0                      # end of the previous interval (avoids double counting)
+        for r_start, r_end in ivs:
+            floor = prev_end
+            for w_start in range(r_start, r_end, size):
+                w_end = min(w_start + size, r_end)
+                wins.append((chrom, w_start, w_end, floor))
+                floor = w_end             # a read starting earlier was already counted
+            prev_end = r_end
+    return wins, empty
+
+
 def _scan_intervals(bam, intervals, mapped_per_contig, depths, min_mapq, exclude_flags,
                     hist_cap=None, profile=False, read_stats=False, want_sq=False,
                     nodup=False):
     """
     Accumulates the depth over a set of intervals {contig: [(start, end), ...]}
-    (sorted and disjoint per contig). Returns a dict:
+    (sorted and disjoint per contig), window after window. Returns a dict:
         length     total size of the intervals
         sum_depth  sum of the depths over all positions
         reads      number of reads
@@ -337,71 +451,19 @@ def _scan_intervals(bam, intervals, mapped_per_contig, depths, min_mapq, exclude
         hist       (if hist_cap) numpy array: positions per depth value 0..hist_cap
         profile    (if profile)  numpy array: depth at every position, intervals concatenated
     """
-    target_len = sum_depth = n_reads = sum_sq = 0
-    stats = [0] * N_STATS if read_stats else None
-    n_ge = {d: 0 for d in depths}
-    hist = np.zeros(hist_cap + 1, dtype=np.int64) if hist_cap else None
-    n_ge_nd = {d: 0 for d in depths} if nodup else None
-    hist_nd = np.zeros(hist_cap + 1, dtype=np.int64) if (nodup and hist_cap) else None
-    pieces = [] if profile else None
-
+    acc = _Acc(depths, hist_cap, read_stats, want_sq, nodup, profile)
+    # empty contigs keep their place in the profile: walk the contigs in order
     for chrom, ivs in intervals.items():
-        span = sum(e - s for s, e in ivs)
-        target_len += span                    # counted even without reads (0X coverage)
-        if mapped_per_contig.get(chrom, 0) == 0:
-            # nothing to read (saves time on empty contigs): every position is at 0X
-            if hist is not None:
-                hist[0] += span
-                if hist_nd is not None:
-                    hist_nd[0] += span
-            if pieces is not None:
-                pieces.append(np.zeros(span, dtype=np.int32))
-            continue
-
-        prev_end = 0                      # end of the previous interval (avoids double counting)
-        for r_start, r_end in ivs:
-            floor = prev_end
-            for w_start in range(r_start, r_end, CHUNK_SIZE):
-                w_end = min(w_start + CHUNK_SIZE, r_end)
-                cov, n, st, cov_nd = _chunk_coverage(bam, chrom, w_start, w_end, min_mapq,
-                                                     exclude_flags, floor, read_stats, nodup)
-                floor = w_end             # a read starting earlier was already counted
-                n_reads += n
-                if st is not None:
-                    for i, v in enumerate(st):
-                        stats[i] += v
-                if cov is None:           # window without any read: all positions at 0X
-                    if hist is not None:
-                        hist[0] += w_end - w_start
-                        if hist_nd is not None:
-                            hist_nd[0] += w_end - w_start
-                    if pieces is not None:
-                        pieces.append(np.zeros(w_end - w_start, dtype=np.int32))
-                    continue
-                if nodup:                 # window without any unique read: every position at 0X
-                    if cov_nd is None:
-                        if hist_nd is not None:
-                            hist_nd[0] += w_end - w_start
-                    else:
-                        for d in depths:
-                            n_ge_nd[d] += int(np.count_nonzero(cov_nd >= d))
-                        if hist_nd is not None:
-                            hist_nd += np.bincount(np.minimum(cov_nd, hist_cap), minlength=hist_cap + 1)
-                sum_depth += int(cov.sum())
-                if want_sq:
-                    sum_sq += int(np.dot(cov, cov))
-                for d in depths:
-                    n_ge[d] += int(np.count_nonzero(cov >= d))
-                if hist is not None:
-                    hist += np.bincount(np.minimum(cov, hist_cap), minlength=hist_cap + 1)
-                if pieces is not None:
-                    pieces.append(cov.astype(np.int32))
-            prev_end = r_end
-
-    return {"length": target_len, "sum_depth": sum_depth, "reads": n_reads, "n_ge": n_ge,
-            "hist": hist, "sum_sq": sum_sq, "stats": stats,
-            "n_ge_nd": n_ge_nd, "hist_nd": hist_nd,
-            "profile": np.concatenate(pieces) if pieces else None}
+        wins, empty = _windows({chrom: ivs}, mapped_per_contig)
+        for _, span in empty:
+            acc.add_empty(span)
+        for c, w_start, w_end, floor in wins:
+            acc.add(_scan_window(bam, c, w_start, w_end, floor, depths, min_mapq, exclude_flags,
+                                 hist_cap, profile, read_stats, want_sq, nodup))
+    return {"length": acc.length, "sum_depth": acc.sum_depth, "reads": acc.reads, "n_ge": acc.n_ge,
+            "hist": acc.hist, "sum_sq": acc.sum_sq, "stats": acc.stats,
+            "n_ge_nd": acc.n_ge_nd, "hist_nd": acc.hist_nd,
+            "profile": np.concatenate(acc.pieces) if acc.pieces else None}
 
 
 def depth_shape(hist, total, sum_depth, sum_sq, cap=None):
@@ -489,12 +551,32 @@ def _open_indexed(bam_path, threads):
     return bam
 
 
+_HANDLES = {}                    # one open BAM per worker process (see _window_job)
+MIN_WINDOW = 250_000             # smallest window used to share a genome between workers
+
+
+def _window_size(genome_len, workers):
+    """Window size: CHUNK_SIZE, or smaller when several workers must share a small genome."""
+    if workers <= 1:
+        return CHUNK_SIZE
+    return max(MIN_WINDOW, min(CHUNK_SIZE, genome_len // (workers * 8)))
+
+
+def _window_job(task):
+    """Pool worker: one window of one BAM -> (contig, partial result)."""
+    path, chrom, w_start, w_end, floor, params = task
+    bam = _HANDLES.get(path)
+    if bam is None:
+        bam = _HANDLES[path] = pysam.AlignmentFile(path, "rb")
+    return chrom, _scan_window(bam, chrom, w_start, w_end, floor, *params)
+
+
 # ----------------------------------------------------------------------------
 # Whole-genome analysis: 1 result per BAM
 # ----------------------------------------------------------------------------
 def analyze_bam(bam_path, depths=(1, 5, 10), threads=1, min_mapq=0,
                 exclude_flags=0, contigs=None, detail=False,
-                uniformity=False, read_stats=False, grid_xs=None, nodup=False):
+                uniformity=False, read_stats=False, grid_xs=None, nodup=False, workers=1):
     """
     Analyses a sorted AND indexed BAM over the whole genome.
     Returns (result, detail): `result` is a dict of metrics; `detail` is None, or
@@ -513,6 +595,8 @@ def analyze_bam(bam_path, depths=(1, 5, 10), threads=1, min_mapq=0,
     - read_stats=True : adds the READ_STATS_COLUMNS (flags, duplicates...). These are
       computed over the reads of the selected contigs, independently of the
       min_mapq / exclude_flags filters (only `mean_coverage_nodup` depends on them).
+    - workers=N       : N processes share the windows of this BAM (results identical to N=1).
+      `threads` = decompression threads, used when workers = 1.
     """
     exclude_flags |= FLAG_UNMAPPED
 
@@ -532,43 +616,46 @@ def analyze_bam(bam_path, depths=(1, 5, 10), threads=1, min_mapq=0,
         intervals = {c: [(0, n)] for c, n in zip(bam.references, bam.lengths)
                      if n > 0 and (wanted is None or c in wanted)}
 
-        # --- 3. Depth. For a report, contigs are scanned one by one to keep their
-        #        own metrics; otherwise the whole set is scanned in a single call.
-        groups = [{c: ivs} for c, ivs in intervals.items()] if detail else [intervals]
-        target_len = sum_depth = 0
-        n_ge = {d: 0 for d in depths}
-        need_hist = detail or uniformity or bool(grid_xs)
-        hist = np.zeros(HIST_CAP + 1, dtype=np.int64) if need_hist else None
-        hist_nd = np.zeros(HIST_CAP + 1, dtype=np.int64) if (need_hist and nodup) else None
-        n_ge_nd = {d: 0 for d in depths}
-        sum_sq = 0
-        stats = [0] * N_STATS
-        per_contig = []
-        for group in groups:
-            r = _scan_intervals(bam, group, mapped_per_contig, depths, min_mapq,
-                                exclude_flags, hist_cap=HIST_CAP if need_hist else None,
-                                read_stats=read_stats or nodup, want_sq=uniformity, nodup=nodup)
-            target_len += r["length"]
-            sum_depth += r["sum_depth"]
-            sum_sq += r["sum_sq"]
-            if read_stats or nodup:
-                for i, v in enumerate(r["stats"]):
-                    stats[i] += v
-            for d in depths:
-                n_ge[d] += r["n_ge"][d]
-                if nodup:
-                    n_ge_nd[d] += r["n_ge_nd"][d]
-            if need_hist:
-                hist += r["hist"]
-                if nodup:
-                    hist_nd += r["hist_nd"]
-            if detail:
-                chrom = next(iter(group))
-                per_contig.append({
-                    "name": chrom, "length": r["length"],
-                    "mapped": mapped_per_contig.get(chrom, 0),
-                    "mean": round(r["sum_depth"] / r["length"], 2),
-                    "pct": [round(r["n_ge"][d] / r["length"] * 100, 2) for d in depths]})
+    # --- 3. Depth, window by window. The windows are independent, so with workers > 1 they
+    #        are shared between processes (same totals, in a fraction of the time).
+    need_hist = detail or uniformity or bool(grid_xs)
+    hist_cap = HIST_CAP if need_hist else None
+    with_stats = read_stats or nodup
+    make = lambda: _Acc(depths, hist_cap, with_stats, uniformity, nodup)
+    total_acc = make()
+    per = {c: make() for c in intervals} if detail else None     # per-contig metrics (report)
+    wins, empty = _windows(intervals, mapped_per_contig, _window_size(sum(e - s for ivs in intervals.values() for s, e in ivs), workers))
+    for chrom, span in empty:
+        total_acc.add_empty(span)
+        if detail:
+            per[chrom].add_empty(span)
+
+    def take(chrom, p):
+        total_acc.add(p)
+        if detail:
+            per[chrom].add(p)
+
+    params = (list(depths), min_mapq, exclude_flags, hist_cap, False, with_stats, uniformity, nodup)
+    if workers > 1 and len(wins) > 1:
+        tasks = [(bam_path, c, ws, we, fl, params) for c, ws, we, fl in wins]
+        with multiprocessing.Pool(min(workers, len(wins))) as pool:
+            for chrom, p in pool.imap_unordered(_window_job, tasks, chunksize=1):
+                take(chrom, p)
+    else:
+        with _open_indexed(bam_path, threads) as bam:
+            for c, ws, we, fl in wins:
+                take(c, _scan_window(bam, c, ws, we, fl, *params))
+
+    target_len, sum_depth, sum_sq = total_acc.length, total_acc.sum_depth, total_acc.sum_sq
+    n_ge, hist, hist_nd, n_ge_nd = total_acc.n_ge, total_acc.hist, total_acc.hist_nd, total_acc.n_ge_nd
+    stats = total_acc.stats if with_stats else [0] * N_STATS
+    per_contig = []
+    if detail:
+        for chrom, a in per.items():
+            per_contig.append({
+                "name": chrom, "length": a.length, "mapped": mapped_per_contig.get(chrom, 0),
+                "mean": round(a.sum_depth / a.length, 2),
+                "pct": [round(a.n_ge[d] / a.length * 100, 2) for d in depths]})
 
     if target_len == 0:
         raise ValueError("genome length is zero (contigs missing or filtered out)")
