@@ -123,24 +123,13 @@ def _fmt(value):
 
 
 def write_table(rows, columns, path, fmt):
-    """Writes the table as tsv / csv / xlsx (decimals with 2 digits)."""
+    """Writes the table as tsv / csv (decimals with 2 digits)."""
     if fmt in ("tsv", "csv"):
         with open(path, "w", newline="") as fh:
             writer = csv.DictWriter(fh, fieldnames=columns,
                                     delimiter="\t" if fmt == "tsv" else ",")
             writer.writeheader()
             writer.writerows({k: _fmt(v) for k, v in row.items()} for row in rows)
-    elif fmt == "xlsx":
-        from openpyxl import Workbook        # late import: optional dependency
-        wb = Workbook()
-        ws = wb.active
-        ws.append(columns)
-        for row in rows:
-            ws.append([("NA" if row[c] is None else row[c]) for c in columns])
-            for cell in ws[ws.max_row]:      # numeric cells, displayed with 2 decimals
-                if isinstance(cell.value, float):
-                    cell.number_format = "0.00"
-        wb.save(path)
 
 
 # ----------------------------------------------------------------------------
@@ -323,8 +312,8 @@ def parse_args(argv=None):
     g.add_argument("-o", "--out-dir", dest="out_dir", default=".", metavar="DIRECTORY",
                    help="Output directory, created if needed (default: current directory).")
     g.add_argument("-F", "--out-format", dest="out_format", default="tsv",
-                   choices=["tsv", "csv", "xlsx"], metavar="{tsv,csv,xlsx}",
-                   help="Format of the output tables (default: tsv; xlsx requires openpyxl).")
+                   choices=["tsv", "csv"], metavar="{tsv,csv}",
+                   help="Format of the output tables (default: tsv).")
     g.add_argument("-n", "--out-name", dest="out_name", default="fastbamqc_summary",
                    metavar="NAME",
                    help="Name of the main output file, without extension "
@@ -481,13 +470,6 @@ def main(argv=None):
             depths = sorted(set(args.depths) | {interp_depth})
             log.info("Depth threshold %dX added to the depth columns "
                      "(needed for the interpretability rule)", interp_depth)
-    if args.out_format == "xlsx":
-        try:
-            import openpyxl  # noqa: F401
-        except ImportError:
-            log.error("xlsx output requires openpyxl (pip install 'fastbamqc[xlsx]')")
-            return 2
-
     bams = find_bams(args.input_dir, args.pattern)
     if not bams:
         log.error("No file matching '%s' in %s", args.pattern, args.input_dir)

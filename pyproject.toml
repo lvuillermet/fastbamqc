@@ -1,17 +1,35 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "fastbamqc"
-version = "0.6.0"
+version = "1.0.0"
 description = "Fast mapping and depth QC metrics for sorted, indexed BAM files (whole genome or amplicon/panel)"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Loic Vuillermet", email = "loic.vuillermet@univ-rouen.fr" },
+    { name = "Anna Cosson", email = "anna.cosson@u-paris.fr" },
+    { name = "Romain Coppee", email = "romain.coppee@univ-rouen.fr },
+]
+keywords = ["bam", "coverage", "depth", "quality control", "amplicon", "genomics"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
 requires-python = ">=3.9"
 dependencies = ["pysam>=0.21", "numpy>=1.21"]
 
-[project.optional-dependencies]
-xlsx = ["openpyxl>=3.0"]
+[project.urls]
+Homepage = "https://github.com/lvuillermet/fastbamqc"
+Issues = "https://github.com/lvuillermet/fastbamqc/issues"
+Changelog = "https://github.com/lvuillermet/fastbamqc/blob/main/CHANGELOG.md"
 
 [project.scripts]
 fastbamqc = "fastbamqc.cli:main"

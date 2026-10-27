@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <code>v0.6.0</code> &nbsp;·&nbsp; Python ≥ 3.9 &nbsp;·&nbsp; Linux / macOS (Windows through WSL)
+  <code>v1.0.0</code> &nbsp;·&nbsp; Python ≥ 3.9 &nbsp;·&nbsp; Linux / macOS (Windows through WSL)
 </p>
 
 ---
@@ -59,16 +59,16 @@ full-featured QC suite (insert size, GC bias, base-quality plots, …): it focus
 
 fastbamqc needs **Python ≥ 3.9** and two libraries, installed automatically: [`pysam`](https://pysam.readthedocs.io) and
 [`numpy`](https://numpy.org). `samtools` is **not** required to run it (only to sort and index your BAM files).
-Excel output needs the optional `openpyxl`.
 
 > **Windows:** `pysam` does not run on native Windows. Install WSL (Ubuntu) and follow the Linux instructions inside it.
 
-### Option A: Python virtual environment (`venv`)
+### Option A: from the repository, in a Python virtual environment (`venv`)
 
-Works on any machine with Python 3.9+ (check with `python3 --version`).
+Works on any machine with Python 3.9+ and `git` (check with `python3 --version`).
 
 ```bash
-# 1. get the code (zip archive or git clone), then go into the folder
+# 1. get the code
+git clone https://github.com/lvuillermet/fastbamqc.git
 cd fastbamqc
 
 # 2. create and activate a virtual environment
@@ -77,32 +77,43 @@ source .venv/bin/activate          # Linux / macOS / WSL
 
 # 3. install
 pip install --upgrade pip
-pip install .                      # add ".[xlsx]" for Excel output
+pip install .
 
 # 4. check
 fastbamqc --version
 ```
 
+No `git`? Download the repository as a zip archive from GitHub (green **Code** button → **Download ZIP**), unzip it,
+`cd` into the folder and continue at step 2.
+
 Next time, only `source .venv/bin/activate` is needed before using `fastbamqc`.
+To update: `git pull`, then `pip install .` again.
 For development, use `pip install -e .`: code changes are then picked up immediately.
 
 > On Debian / Ubuntu, if `python3 -m venv` fails, install the module first: `sudo apt install python3-venv`.
 
-### Option B: conda / mamba / micromamba
+### Option B: from the repository, in a conda / mamba / micromamba environment
 
 ```bash
+git clone https://github.com/lvuillermet/fastbamqc.git
+cd fastbamqc
+
 micromamba create -n fastbamqc -c conda-forge -c bioconda python=3.11 pysam numpy samtools
 micromamba activate fastbamqc
 pip install .
+
 fastbamqc --version
 ```
 
-### Option C: Bioconda (planned)
+(`conda` or `mamba` work the same way in place of `micromamba`.) `samtools` is only there to sort and index BAM files.
 
-A Bioconda recipe is planned; once published the installation will be:
+### Option C: PyPI and Bioconda (coming soon)
+
+Once the package is published, these one-line installations will be available:
 
 ```bash
-conda install -c conda-forge -c bioconda fastbamqc
+pip install fastbamqc                                    # PyPI
+conda install -c conda-forge -c bioconda fastbamqc       # Bioconda
 ```
 
 Until then, use options A or B.
@@ -137,7 +148,7 @@ flowchart LR
     C --> D[Depth per position<br/>start/end difference array]
     D --> E[Mean depth<br/>% positions ≥ X]
     E --> F[Interpretability verdict]
-    F --> G[TSV / CSV / XLSX]
+    F --> G[TSV / CSV]
     F --> H[HTML report]
 ```
 
@@ -184,7 +195,7 @@ fastbamqc -i DIRECTORY [-f PATTERN] [-b FILE.bed] [options]
 |---|---|---|
 | `-o`, `--out-dir DIRECTORY` | current directory | Output directory (created if needed). |
 | `-n`, `--out-name NAME` | `fastbamqc_summary` | Name of the main output file, without extension. |
-| `-F`, `--out-format {tsv,csv,xlsx}` | `tsv` | Table format. `xlsx` requires `openpyxl`. |
+| `-F`, `--out-format {tsv,csv}` | `tsv` | Table format (tab- or comma-separated). |
 | `--report` | off | Also write a self-contained HTML report `<out-dir>/<out-name>.html`. |
 | `--report-title TEXT` | `fastbamqc report` | Title shown in the report. |
 | `--log-file FILE` | none | Also write the progress messages to a file. |
@@ -445,7 +456,6 @@ Results on other genomes, other machines or cold caches may differ.
 | `index missing (.bai/.csi)` | Index the file: `samtools index x.bam`. |
 | `No file matching '…'` / `Directory not found` | Check `-i` and `-f`; quote the pattern (`"*.bam"`). |
 | `BED contig(s) not found in the BAM` | The BED chromosome names do not match the BAM (`chr1` vs `1`). |
-| `xlsx` output fails | Install the extra: `pip install ".[xlsx]"`. |
 | `pysam` cannot be installed | Use Linux, macOS or WSL; on native Windows `pysam` is not available. |
 | Memory too high | Lower `-c` (each process uses its own memory). |
 | Verdicts differ from what you expected | Check `--interp-depth`, `--interp-pct` and whether `--interp-nodup` is on. |
@@ -454,4 +464,8 @@ Results on other genomes, other machines or cold caches may differ.
 
 ## Citation and licence
 
-*Remember: To be completed before publication* (licence, DOI of the archived release, citation).
+fastbamqc is released under the [MIT licence](LICENSE).
+
+If you use it, please cite it using the metadata in [`CITATION.cff`](CITATION.cff) (GitHub shows a *Cite this repository* button). The citation of the article and the DOI of the archived release will be added here once available.
+
+Changes between versions are listed in [`CHANGELOG.md`](CHANGELOG.md).

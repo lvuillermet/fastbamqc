@@ -1,0 +1,41 @@
+# This file tells GitHub / Zenodo / Zotero how to cite fastbamqc.
+# Replace every TODO value, then check it with:  pip install cffconvert && cffconvert --validate
+cff-version: 1.2.0
+message: "If you use fastbamqc, please cite it as below."
+type: software
+title: "fastbamqc: fast depth and interpretability QC for BAM files"
+abstract: >-
+  fastbamqc computes mapping and depth metrics (percentage mapped, mean depth, percentage of positions covered at
+  least X-fold) and an interpretability verdict for sorted, indexed BAM files, for whole genomes and for
+  amplicon / panel data, with an optional self-contained HTML report.
+version: 1.0.0
+date-released: 2026-10-27
+license: MIT
+repository-code: "https://github.com/lvuillermet/fastbamqc"
+url: "https://github.com/lvuillermet/fastbamqc"
+# doi: 10.5281/zenodo.XXXXXXX      # TODO: Zenodo DOI of this version (after the GitHub release)
+keywords:
+  - BAM
+  - coverage
+  - depth
+  - quality control
+  - amplicon
+  - genomics
+authors:
+  - family-names: "Vuillermet"
+    given-names: "Loïc"
+    email: "loic.vuillermet@univ-rouen.fr"
+    affiliation: "Université de Rouen Normandie, Laboratoire de parasitologie-mycologie, UR7510"
+  - family-names: "Cosson"
+    given-names: "Anna"
+    affiliation: "Université Paris Cité, IRD, Inserm, MERIT"
+  - family-names: "Coppée"
+    given-names: "Romain"
+    affiliation: "Université de Rouen Normandie, Laboratoire de parasitologie-mycologie, UR7510"
+# preferred-citation:
+#   type: article
+#   title: "..."
+#   authors: [...]
+#   journal: "Bioinformatics"
+#   year: 2026
+#   doi: "10.1093/bioinformatics/..."
