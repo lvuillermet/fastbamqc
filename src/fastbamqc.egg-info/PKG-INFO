@@ -1,163 +1,496 @@
 Metadata-Version: 2.4
 Name: fastbamqc
-Version: 0.6.0
+Version: 1.0.1
 Summary: Fast mapping and depth QC metrics for sorted, indexed BAM files (whole genome or amplicon/panel)
+Author-email: Loic Vuillermet <loic.vuillermet@univ-rouen.fr>, Anna Cosson <anna.cosson@u-paris.fr>, Romain Coppee <romain.coppee@univ-rouen.fr>
+License-Expression: MIT
+Project-URL: Homepage, https://github.com/lvuillermet/fastbamqc
+Project-URL: Issues, https://github.com/lvuillermet/fastbamqc/issues
+Project-URL: Changelog, https://github.com/lvuillermet/fastbamqc/blob/main/CHANGELOG.md
+Keywords: bam,coverage,depth,quality control,amplicon,genomics
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Science/Research
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Operating System :: MacOS
+Classifier: Programming Language :: Python :: 3
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown
+License-File: LICENSE
 Requires-Dist: pysam>=0.21
 Requires-Dist: numpy>=1.21
-Provides-Extra: xlsx
-Requires-Dist: openpyxl>=3.0; extra == "xlsx"
+Dynamic: license-file
 
-# fastbamqc
+<h1 align="center">fastbamqc</h1>
 
-Fast mapping and depth metrics (percentage mapped, mean depth, percentage of positions covered at >= X)
-for coordinate-sorted and indexed BAM files. Works on whole genomes and on amplicon / panel data.
+<p align="center">
+  <b>Fast mapping and depth QC for sorted, indexed BAM files</b><br>
+  Whole genome or amplicon / panel &nbsp;·&nbsp; interpretability verdict &nbsp;·&nbsp; self-contained HTML report
+</p>
+
+<p align="center">
+  <code>v1.0.0</code> &nbsp;·&nbsp; Python ≥ 3.9 &nbsp;·&nbsp; Linux / macOS (Windows through WSL)
+</p>
+
+---
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23693362.svg)](https://doi.org/10.5281/zenodo.23693362)
+
+## Contents
+
+1. [What it does](#what-it-does)
+2. [Installation](#installation)
+3. [Quick start](#quick-start)
+4. [How it works](#how-it-works)
+5. [Command-line reference](#command-line-reference)
+6. [Examples](#examples)
+7. [Output files and columns](#output-files-and-columns)
+8. [Interpretability verdict](#interpretability-verdict)
+9. [HTML report](#html-report)
+10. [Extra metrics](#extra-metrics)
+11. [Using several CPU cores](#using-several-cpu-cores)
+12. [Definitions and known limits](#definitions-and-known-limits)
+13. [Performance](#performance)
+14. [Troubleshooting](#troubleshooting)
+15. [Citation and licence](#citation-and-licence)
+
+---
+
+## What it does
+
+For every BAM file of a directory, fastbamqc reports in one table:
+
+| Metric | Meaning |
+|---|---|
+| `total_read`, `mapped_read`, `percentage_mapped` | read counts, taken from the BAM index |
+| `mean_coverage` | mean depth over the genome (or over each target) |
+| `1X`, `5X`, `10X`, … | % of positions covered by at least *d* reads (you choose the thresholds) |
+| `interpretability` | `INTERPRETABLE` / `NON_INTERPRETABLE` according to a rule you can change |
+
+Two modes:
+
+- **Whole genome** (default): one row per sample, over every contig of the BAM header.
+- **Amplicon / panel** (`--bed`): one row per target (gene) and per sample.
+
+Optionally it also writes a **single HTML file** (works offline, can be e-mailed) with overview charts, one page per sample,
+live sliders to change the interpretability rule, and, for whole genomes, a duplicates section.
+
+It was designed as a fast, lightweight alternative to Qualimap for routine QC of many samples. It does not replace a
+full-featured QC suite (insert size, GC bias, base-quality plots, …): it focuses on depth and breadth of coverage.
+
+---
 
 ## Installation
-    pip install .            # or: pip install -e .  (development: code changes are picked up immediately)
-    pip install ".[xlsx]"    # + Excel export
 
-`pysam` is not available on native Windows: use WSL.
+fastbamqc needs **Python ≥ 3.9** and two libraries, installed automatically: [`pysam`](https://pysam.readthedocs.io) and
+[`numpy`](https://numpy.org). `samtools` is **not** required to run it (only to sort and index your BAM files).
 
-## Usage
-Whole genome (one row per sample):
+> **Windows:** `pysam` does not run on native Windows. Install WSL (Ubuntu) and follow the Linux instructions inside it.
 
-    fastbamqc -i ./bams -f "*_sorted.bam" -o ./results -F tsv -c 16
+### Option A: from the repository, in a Python virtual environment (`venv`)
 
-Amplicon-seq / panel (one row per gene and per sample):
+Works on any machine with Python 3.9+ and `git` (check with `python3 --version`).
 
-    fastbamqc -i ./bams -f "*_sorted.bam" -o ./results --bed amplicons.bed -d 1,10,30,100,500
+```bash
+# 1. get the code
+git clone https://github.com/lvuillermet/fastbamqc.git
+cd fastbamqc
 
-`fastbamqc --help` lists all options. BAM files must be sorted and indexed (`samtools index`).
+# 2. create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate          # Linux / macOS / WSL
 
-### CPU cores
-`-c N` is the total number of cores to use (default 4). In whole-genome mode a BAM is cut into independent
-windows that are shared between processes, so **one big file also uses several cores**; the totals are exactly
-the same whatever the number of cores. By default (`-t` not given) the cores are shared between the BAM
-files: 1 file -> all the cores, 3 files on 4 cores -> 3 files at the same time. `-t N` fixes the number of
-cores used by each file (files in parallel = `-c // -t`). In amplicon mode `-t` is the number of
-decompression threads per file. Memory grows with the number of processes (about 100-250 MiB each on the
-test data).
+# 3. install
+pip install --upgrade pip
+pip install .
 
-## Interpretability (on by default)
-Every result row (one sample in whole-genome mode, one gene in amplicon mode) gets an extra last column
-`interpretability`. By default the rule is **at least 75% of the region covered at >= 10X**:
+# 4. check
+fastbamqc --version
+```
 
-    fastbamqc -i ./bams -o ./results --bed amplicons.bed                                  # 75% at 10X
-    fastbamqc -i ./bams -o ./results --bed amplicons.bed --interp-depth 20 --interp-pct 90
-    fastbamqc -i ./bams -o ./results --no-interp                                          # no column, no sliders
+No `git`? Download the repository as a zip archive from GitHub (green **Code** button → **Download ZIP**), unzip it,
+`cd` into the folder and continue at step 2.
 
-A row is `INTERPRETABLE` when at least `--interp-pct` percent of its region (the genome, or the gene) is covered by
-at least `--interp-depth` reads, and `NON_INTERPRETABLE` otherwise.
+Next time, only `source .venv/bin/activate` is needed before using `fastbamqc`.
+To update: `git pull`, then `pip install .` again.
+For development, use `pip install -e .`: code changes are then picked up immediately.
 
-- `--interp-depth` and `--interp-pct` are independent: the one you omit keeps its default (10X / 75%).
-- `--interp-nodup` (whole genome only): by default the rule uses the depth of **all** reads. With this option
-  duplicate reads (flagged 0x400 **or** estimated from the alignments, see `--read-stats`) are left out. The
-  table gets the columns `<d>X_nodup` (breadth of coverage without duplicates, one per depth threshold) and the
-  rule reads `<interp-depth>X_nodup`. Recommended for libraries with many duplicates (WGA, low input), where
-  the raw depth overstates the usable depth. Cost: every read is checked for duplication (about +50-60% run
-  time on synthetic data; not measured on real BAMs). Not available with `--bed` or `--no-interp`. In the
-  report, the sliders, breadth-of-coverage charts, depth distribution and coverage curves then describe the
-  depth without duplicates (per-contig values still include them) and the CSV file name ends with `_nodup`.
-- `--no-interp` removes the column (and the report sliders); it cannot be combined with the two options above.
-- The depth threshold is added to the `<d>X` columns if it is not already in `--depths`, so the verdict can always be
-  re-checked from the table.
-- The decision uses the 2-decimal value shown in the table (`>=` comparison: exactly 75.00 is INTERPRETABLE).
-- In whole-genome mode the region is the set of analysed contigs: use `--contigs` to exclude decoy/alt contigs.
+> On Debian / Ubuntu, if `python3 -m venv` fails, install the module first: `sudo apt install python3-venv`.
 
-## HTML report (optional)
-Add `--report` to get a single self-contained HTML file (`<out-dir>/<out-name>.html`) next to the tables.
-It has no external dependency: it opens offline in any browser and can be e-mailed.
+### Option B: from the repository, in a conda / mamba / micromamba environment
 
-    fastbamqc -i ./bams -o ./results --bed amplicons.bed --report --report-title "Run 42"
+```bash
+git clone https://github.com/lvuillermet/fastbamqc.git
+cd fastbamqc
 
-- **Overview** tab: summary cards, comparison charts of all samples and the full sortable/filterable table (CSV download).
-  - whole genome: mean coverage per sample (coloured by interpretability), % mapped, breadth of coverage, a **Duplicates** section, coverage curves;
-  - amplicon: targets x samples heatmap (choose the metric), interpretable targets per sample, coverage and interpretability rate per target.
-- **Sample details** tab: pick a sample in the menu (or use the arrows).
-  - whole genome: metrics, breadth of coverage, duplicates and read breakdown, depth distribution, coverage curve, mean depth per contig (largest 100 contigs);
-  - amplicon: table of the targets, any metric per target, depth profile along each target (selector, shared y-axis, log scale) and a gallery of all targets.
-- `--report` makes the analysis slightly slower (depth histograms/profiles are collected); the tables are identical with or without it.
-- In whole-genome mode `--report` turns `--read-stats` on (needed for the Duplicates section; about +50-60% run time on synthetic data, see below). The section is not shown in amplicon mode, where duplicates are expected.
+micromamba create -n fastbamqc -c conda-forge -c bioconda python=3.11 pysam numpy samtools
+micromamba activate fastbamqc
+pip install .
+
+fastbamqc --version
+```
+
+(`conda` or `mamba` work the same way in place of `micromamba`.) `samtools` is only there to sort and index BAM files.
+
+### Option C: PyPI and Bioconda (coming soon)
+
+Once the package is published, these one-line installations will be available:
+
+```bash
+pip install fastbamqc                                    # PyPI
+conda install -c conda-forge -c bioconda fastbamqc       # Bioconda
+```
+
+Until then, use options A or B.
+
+---
+
+## Quick start
+
+BAM files must be **coordinate-sorted and indexed** (`samtools sort` then `samtools index`, so that each `x.bam` has an `x.bam.bai`).
+
+```bash
+# whole genome, tables only
+fastbamqc -i ./bams -o ./results
+
+# whole genome, with the HTML report
+fastbamqc -i ./bams -o ./results --report
+
+# amplicon / panel
+fastbamqc -i ./bams -o ./results --bed amplicons.bed --report
+```
+
+Results are written to `./results` (`fastbamqc_summary.tsv`, and `fastbamqc_summary.html` with `--report`).
+
+---
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[BAM + index] --> B[Read counts<br/>from the index]
+    A --> C[Windows over the contigs<br/>or over the BED targets]
+    C --> D[Depth per position<br/>start/end difference array]
+    D --> E[Mean depth<br/>% positions ≥ X]
+    E --> F[Interpretability verdict]
+    F --> G[TSV / CSV]
+    F --> H[HTML report]
+```
+
+1. **Read counts.** `total_read`, `mapped_read` and `percentage_mapped` come from the BAM index (`idxstats`), without reading the file.
+2. **Depth.** Reads are scanned window by window. For each window, every read adds +1 at its start and −1 after its end
+   in an array; a cumulative sum gives the exact depth of **every position**. Mean depth and the % of positions at
+   ≥ *d* reads are then exact, not sampled or approximated.
+3. **Independent windows.** Each read is counted in one window only, so windows can be processed in any order and
+   by different processes; the totals are exactly identical whatever the number of cores.
+4. **Amplicon mode.** Only the BED targets are read. Targets sharing a gene name are merged by default (`--same-gene`).
+5. **Interpretability.** A row is `INTERPRETABLE` when at least *P* % of its region is covered at ≥ *D* X (default **75 % at 10X**).
+6. **Duplicates (whole genome, with `--read-stats` or `--report`).** Duplicates are the reads flagged 0x400 in the
+   BAM **and** the reads estimated from the alignments (same start, end, strand, mate position and template length as
+   an earlier read). The estimate is conservative compared with `samtools markdup` (see [limits](#definitions-and-known-limits)).
+
+Values are rounded to 2 decimals in the tables.
+
+---
+
+## Command-line reference
+
+```
+fastbamqc -i DIRECTORY [-f PATTERN] [-b FILE.bed] [options]
+```
+
+### Required
+
+| Option | Description |
+|---|---|
+| `-i`, `--input-dir DIRECTORY` | Directory containing the BAM files. **The only mandatory option.** |
+
+### Input
+
+| Option | Default | Description |
+|---|---|---|
+| `-f`, `--pattern PATTERN` | `*.bam` | Pattern of the files to analyse, e.g. `"*_sorted.bam"`. Always quote it. Sample names are the file names without the fixed part of the pattern. |
+| `-b`, `--bed FILE.bed` | none | Enables **amplicon / panel mode**. BED columns: 1 chrom, 2 start (0-based), 3 end, 4 gene name. Without a 4th column, targets are named `chrom:start-end`. Contig names must match the BAM. |
+| `--same-gene {merge,separate}` | `merge` | With `--bed`, how to handle several BED lines sharing a gene name: `merge` groups them into one target with merged regions, `separate` treats each line as an independent target. |
+| `--contigs LIST` | all | Whole genome only: restrict to comma-separated contigs, e.g. `chr1,chr2,chrX`. Not compatible with `--bed`. Useful to leave out decoy / alt contigs. |
+
+### Output
+
+| Option | Default | Description |
+|---|---|---|
+| `-o`, `--out-dir DIRECTORY` | current directory | Output directory (created if needed). |
+| `-n`, `--out-name NAME` | `fastbamqc_summary` | Name of the main output file, without extension. |
+| `-F`, `--out-format {tsv,csv}` | `tsv` | Table format (tab- or comma-separated). |
+| `--report` | off | Also write a self-contained HTML report `<out-dir>/<out-name>.html`. |
+| `--report-title TEXT` | `fastbamqc report` | Title shown in the report. |
+| `--log-file FILE` | none | Also write the progress messages to a file. |
+
+### Depth and filters
+
+| Option | Default | Description |
+|---|---|---|
+| `-d`, `--depths LIST` | `1,5,10` | Depth thresholds. One `<d>X` column per threshold. |
+| `-q`, `--min-mapq MAPQ` | `0` | Minimum mapping quality for a read to count in the depth. |
+| `--exclude-flags FLAGS` | `0` | SAM flags excluded from the depth (decimal or `0x…`). Unmapped reads are always excluded. `1024` = duplicates, `3584` = duplicates + secondary + supplementary. **Do not exclude duplicates on amplicon data.** |
+
+### Interpretability
+
+| Option | Default | Description |
+|---|---|---|
+| `--interp-depth DEPTH` | `10` | Depth (X) a position must reach to count as covered. Added to the `<d>X` columns if missing. |
+| `--interp-pct PERCENT` | `75` | Minimum % of the region that must reach that depth. |
+| `--interp-nodup` | off | Whole genome only. Evaluate the rule on the depth **without duplicates** (flagged or estimated). Adds `<d>X_nodup` columns. About +50–60 % run time. Recommended for libraries with many duplicates (WGA, low input). |
+| `--no-interp` | off | No interpretability column and no sliders in the report. |
+
+### Extra metrics
+
+| Option | Description |
+|---|---|
+| `--read-stats` | Whole genome only. Read-level QC and duplicates (see [Extra metrics](#extra-metrics)). Turned on automatically by `--report` in whole-genome mode. |
+| `--uniformity` | Depth-evenness columns (median, CV, fold-80, …), per sample or per target. |
+
+### Performance
+
+| Option | Default | Description |
+|---|---|---|
+| `-c`, `--max-cores N` | `4` | **Total** number of CPU cores to use. |
+| `-t`, `--threads-per-bam N` | automatic | Cores used by **each** BAM. Automatic: the cores are shared between the files (1 file → all cores). See [Using several CPU cores](#using-several-cpu-cores). |
+
+### Other
+
+| Option | Description |
+|---|---|
+| `-V`, `--version` | Show the version and exit. |
+| `-h`, `--help` | Show the help and exit. |
+
+---
+
+## Examples
+
+**Whole genome, defaults** (10X / 75 % verdict):
+```bash
+fastbamqc -i ./bams -o ./results
+```
+
+**Whole genome with report, 8 cores, project title:**
+```bash
+fastbamqc -i ./bams -o ./results -n run42 --report --report-title "Run 42" -c 8
+```
+
+**Library with many duplicates (WGA): judge the samples without duplicates:**
+```bash
+fastbamqc -i ./bams -o ./results --report --interp-nodup -c 8
+```
+
+**Stricter rule: 90 % of the genome at ≥ 20X, extra thresholds:**
+```bash
+fastbamqc -i ./bams -o ./results -d 1,5,10,20,30 --interp-depth 20 --interp-pct 90
+```
+
+**Only some contigs, CSV output, pattern on file names:**
+```bash
+fastbamqc -i ./bams -f "*_sorted.bam" -o ./results -F csv --contigs chr1,chr2,chr3
+```
+
+**Only well-mapped reads count (MAPQ ≥ 20):**
+```bash
+fastbamqc -i ./bams -o ./results -q 20
+```
+
+**Amplicon / panel:**
+```bash
+fastbamqc -i ./bams -o ./results --bed amplicons.bed -d 1,10,100,500 --report
+```
+
+**Amplicon with a different rule, or no verdict at all:**
+```bash
+fastbamqc -i ./bams -o ./results --bed amplicons.bed --interp-depth 30 --interp-pct 90
+fastbamqc -i ./bams -o ./results --bed amplicons.bed --no-interp
+```
+
+**Many files on a big machine, 2 cores per BAM (so 8 files at a time on 16 cores):**
+```bash
+fastbamqc -i ./bams -o ./results -c 16 -t 2
+```
+
+**Uniformity metrics and read statistics (tables only):**
+```bash
+fastbamqc -i ./bams -o ./results --uniformity --read-stats
+```
+
+---
+
+## Output files and columns
+
+**Whole genome**: one table `<out-dir>/<out-name>.<fmt>`, one row per sample.
+
+| Column | Meaning |
+|---|---|
+| `sample` | sample name |
+| `total_read`, `mapped_read`, `percentage_mapped` | from the BAM index |
+| `mean_coverage` | mean depth over the analysed contigs |
+| `<d>X` | % of positions with depth ≥ d |
+| `interpretability` | verdict (unless `--no-interp`) |
+
+**Amplicon / panel** (`--bed`): one row per target and per sample.
+
+- `<out-dir>/<out-name>.<fmt>`: all rows of all samples.
+- `<out-dir>/per_sample/<sample>.amplicons.<fmt>`: one file per sample.
+
+| Column | Meaning |
+|---|---|
+| `sample`, `gene` | sample and target names |
+| `chrom`, `start`, `end` | extent of the target |
+| `length`, `n_regions` | bases actually targeted, number of merged regions |
+| `reads`, `percentage_of_mapped` | reads on the target, and as % of the mapped reads |
+| `mean_coverage`, `<d>X`, `interpretability` | as above |
+
+With `--report`: a single HTML file `<out-dir>/<out-name>.html`.
+
+---
+
+## Interpretability verdict
+
+A row (a sample in whole-genome mode, a gene in amplicon mode) is **`INTERPRETABLE`** when at least `--interp-pct` percent
+of its region is covered by at least `--interp-depth` reads, and `NON_INTERPRETABLE` otherwise. Defaults: **75 % at 10X**.
+
+- The comparison is `≥` on the 2-decimal value shown in the table (exactly 75.00 is `INTERPRETABLE`).
+- `--interp-depth` and `--interp-pct` are independent: the one you omit keeps its default.
+- The depth is added to the `<d>X` columns if it is not in `--depths`, so the verdict can always be re-checked from the table.
+- In whole-genome mode the region is the set of analysed contigs: use `--contigs` to leave out decoys.
+- **`--interp-nodup`** uses the coverage *without duplicates*. With whole-genome amplification (WGA) or low-input
+  libraries, duplicates can be the majority of the reads; the raw depth then overstates the usable depth.
+  The two rules can give different verdicts: choose before looking at the results, and report which one you used.
+
+---
+
+## HTML report
+
+`--report` writes one self-contained HTML file: no internet connection and no external file are needed.
+
+- **Overview**: summary cards, comparison charts of all samples, full sortable and filterable table (CSV download).
+  - whole genome: mean coverage per sample (coloured by verdict), % mapped, breadth of coverage, coverage curves, **Duplicates** section;
+  - amplicon: targets × samples heatmap, interpretable targets per sample, coverage and interpretability rate per target.
+- **Sample details**: choose a sample in the menu. Whole genome: metrics, duplicates and read breakdown, depth distribution,
+  coverage curve, mean depth per contig. Amplicon: table of the targets, depth profile along each target, gallery of all targets.
+- **Live sliders** (depth X and minimum % covered) re-evaluate every verdict, chart, table and the CSV download. The
+  percentage covered at the slider depth is computed exactly by fastbamqc (52 depths plus your `--depths`), so the sliders
+  give the same verdicts as a new run with the same thresholds.
 - A link such as `report.html#sample=S1` opens directly on a sample.
+- The Duplicates section exists in whole-genome mode only (duplicates are expected in amplicon data).
 
+---
 
-**Live interpretability rule.** The report always has two
-sliders in the header (unless `--no-interp`) (depth X and minimum % covered) re-evaluate every result live: verdicts, charts,
-tables and the **CSV download** all follow the sliders (the file name carries the values, e.g.
-`fastbamqc_all_results_10X_75pct.csv`; the `<X>X` column of the chosen depth is added when it is not in
-`--depths`). The percentage covered at each slider depth is computed exactly by fastbamqc (52 depths:
-1-20, then 25-100 by 5, 120-300 by 20, 350, 400, 500, 600, 800, 1000, plus your `--depths`), so the
-verdicts are identical to a new run with the same thresholds. The report grows by about 0.3 KB per
-table row (roughly 3 MB for 96 samples x 100 targets; not measured at that size). With `--no-interp` there is no rule and no sliders.
+## Extra metrics
 
-**Coverage curves.** The x axis of the coverage curves stops at 200X, or at your largest `--depths`
-value when it is higher (and earlier when the data stops before).
-
-## Extra metrics (optional)
-
-Both options are off by default: without them the output and the speed are unchanged.
+Both options are off by default; without them the output and the speed are unchanged.
 
 ### `--uniformity` (whole genome and amplicon)
 
-| column | meaning |
+| Column | Meaning |
 |---|---|
 | `median_coverage` | median depth |
-| `cv_coverage` | standard deviation / mean depth (0 = perfectly even) |
-| `pct_above_0.2_mean` | % of positions with depth >= 0.2 x the mean (classic uniformity) |
-| `fold_80` | mean depth / depth reached by 80% of the positions (1 = even; same idea as Picard's `FOLD_80_BASE_PENALTY`) |
+| `cv_coverage` | standard deviation / mean (0 = perfectly even) |
+| `pct_above_0.2_mean` | % of positions with depth ≥ 0.2 × mean |
+| `fold_80` | mean depth / depth reached by 80 % of the positions (1 = even) |
 
-In amplicon mode they are computed per target (exact). In whole-genome mode they come from a depth
-histogram capped at 1000X: a value that would need the capped tail is reported as `NA`. Cost: negligible.
+Exact per target in amplicon mode. In whole-genome mode they come from a depth histogram capped at 1000X; a value
+needing the capped tail is reported as `NA`.
 
 ### `--read-stats` (whole genome only)
 
-| column | meaning |
+| Column | Meaning |
 |---|---|
-| `pct_properly_paired`, `pct_mapq0` | % of primary mapped reads |
 | `primary_mapped_reads` | primary mapped reads (denominator of the percentages) |
+| `pct_properly_paired`, `pct_mapq0` | % of primary mapped reads |
 | `secondary_reads`, `supplementary_reads`, `qcfail_reads` | counts |
 | `marked_dup_reads`, `pct_marked_dup` | reads flagged 0x400 in the BAM |
-| `est_dup_reads`, `pct_est_dup` | duplicates **estimated from the alignments** (see below) |
-| `mean_coverage_nodup` | mean depth without the duplicates (flagged **or** estimated) |
+| `est_dup_reads`, `pct_est_dup` | duplicates **estimated from the alignments** |
+| `mean_coverage_nodup` | mean depth without duplicates (flagged or estimated) |
 
-These counters ignore `--min-mapq` / `--exclude-flags` (only `mean_coverage_nodup` follows them) and
-cover the selected contigs. Percentages use the primary mapped reads as denominator.
+These counters ignore `--min-mapq` and `--exclude-flags` (only `mean_coverage_nodup` follows them).
 
-**How duplicates are estimated.** A BAM that was never run through `MarkDuplicates` has no 0x400 flag.
-In a coordinate-sorted BAM the reads that start at the same position are consecutive, so a primary read
-is counted as a duplicate when an earlier read has the same start, end, strand, mate start and template
-length (a duplicated pair counts as 2 reads). Only the keys of the current start position are kept in
-memory. This is an **estimate**, not Picard / samtools markdup:
-- reads that differ only by soft clipping are not matched (Picard uses the unclipped 5' position);
-- at very high depth on a small genome, independent fragments can coincide by chance and are counted
-  as duplicates (0.01% on a synthetic 15X genome; not measured at 250X). When your BAMs have been
-  marked, compare `pct_est_dup` with `pct_marked_dup` to see how close the estimate is on your data.
+---
 
-**Cost.** `--read-stats` adds a per-read check: on a synthetic 800,000-read BAM the run took about
-+50-60% (1.0 s -> 1.6 s). `--uniformity` alone: no measurable change.
+## Using several CPU cores
 
-The HTML report adds the matching charts (duplicate rate, mean coverage with and without duplicates,
-evenness) when these columns are present.
+- `-c N` is the **total** number of cores (default 4).
+- In whole-genome mode a BAM is cut into independent windows shared between processes, so **a single big file also uses
+  several cores**. The results are exactly identical whatever the number of cores.
+- By default (`-t` not given) the cores are shared between the files: 1 file → all cores, 3 files on 4 cores → 3 files at the same time.
+- `-t N` fixes the number of cores per file; files processed in parallel = `-c // -t`.
+- In amplicon mode `-t` is the number of BAM decompression threads per file.
+- **Memory** grows with the number of processes (roughly 100–250 MiB each in our tests).
 
-## Amplicon / panel mode (`--bed`)
-BED columns: 1 chromosome, 2 start (0-based), 3 end (exclusive), 4 gene name.
-Without a 4th column, the target is named `chrom:start-end`.
+Rule of thumb: just set `-c` to the number of cores you can use, and leave `-t` alone.
 
-Outputs:
-- `<out-dir>/<out-name>.<fmt>`: all rows of all samples (concatenated);
-- `<out-dir>/per_sample/<sample>.amplicons.<fmt>`: one file per sample.
+---
 
-Columns: `sample, gene, chrom, start, end, length, n_regions, reads, percentage_of_mapped, mean_coverage, <d>X`.
+## Definitions and known limits
 
-BED lines sharing the same name (`--same-gene`):
-- `merge` (default): grouped into ONE target; their regions are merged (no double counting).
-  `start`/`end` = extent of the target, `length` = bases actually targeted, `n_regions` = number of merged regions;
-- `separate`: every BED line is an independent target (the name may repeat).
+**What is counted in the depth** (same convention as `mosdepth --fast-mode` and `samtools depth -J`):
 
-Two different names are never merged, even if they overlap: each gene is computed independently.
+- only unmapped reads are excluded by default (duplicates, secondary reads and low MAPQ are kept unless you filter them);
+- a **deletion counts as covered**;
+- overlapping mates are **counted twice**;
+- the denominator is the whole length of the analysed contigs (or of the BED targets).
 
-Notes:
-- BED contig names must match the BAM ones (`chr1` vs `1`), otherwise an explicit error is raised.
-- Do NOT exclude duplicates (`--exclude-flags 1024`) on amplicon data: almost all reads are "duplicates" by construction.
+Other tools use other conventions: `samtools coverage` does not count deletions as covered (about 0.25X lower on our
+~75X *P. falciparum* data), and Picard counts overlapping mates once. Differences between tools may come from
+these definitions rather than from errors.
+
+**Duplicate estimate.** Without a prior `MarkDuplicates`, the 0x400 flag is absent, so duplicates are estimated:
+reads with the same start, end, strand, mate start and template length. This is an **estimate**:
+
+- it is conservative compared with `samtools markdup` (on one *Cyclospora* WGA sample: 87.95 % estimated vs 92.31 % with `samtools markdup`);
+  it has been compared to `samtools markdup` on that one sample only, so compare it with your own data when possible;
+- reads differing only by soft clipping are not matched;
+- at very high depth on a small genome, independent fragments can coincide and be counted as duplicates.
+
+**Other limits.**
+
+- BAM files must be sorted and indexed. CRAM is not supported.
+- In amplicon mode, BED targets with *different* names are never merged, even if they overlap; each gene is computed independently.
+- Tested on Linux. macOS should work but has not been tested; native Windows is not supported (use WSL).
+
+---
+
+## Performance
+
+Measured with the companion benchmark (`fastbamqc-benchmark`): 8 *Plasmodium falciparum* WGS BAM files (mean depth 47–85X),
+4 cores, warm disk cache, median of 3 runs, one machine.
+
+| Tool | Time, 8 BAM | Peak memory | Mean-coverage error vs `samtools depth` |
+|---|---|---|---|
+| mosdepth | 12.0 s | 77 MiB | 0.000 |
+| **fastbamqc** (tables) | **30.7 s** | 202 MiB | 0.002 |
+| **fastbamqc** (`--report`) | **44.8 s** | 204 MiB | 0.002 |
+| samtools coverage | 122.9 s | 13 MiB | 0.229 (does not count deletions) |
+| Qualimap | 241.6 s | 1803 MiB | 0.000 |
+
+mosdepth is faster (about 2.6×) because it computes depth only; fastbamqc also gives the interpretability verdict, the
+threshold columns, and the report. The 0.002X difference with the reference is compatible with the 2-decimal rounding of the tables.
+Results on other genomes, other machines or cold caches may differ.
+
+---
+
+## Troubleshooting
+
+| Message / symptom | Cause and fix |
+|---|---|
+| `index missing (.bai/.csi)` | Index the file: `samtools index x.bam`. |
+| `No file matching '…'` / `Directory not found` | Check `-i` and `-f`; quote the pattern (`"*.bam"`). |
+| `BED contig(s) not found in the BAM` | The BED chromosome names do not match the BAM (`chr1` vs `1`). |
+| `pysam` cannot be installed | Use Linux, macOS or WSL; on native Windows `pysam` is not available. |
+| Memory too high | Lower `-c` (each process uses its own memory). |
+| Verdicts differ from what you expected | Check `--interp-depth`, `--interp-pct` and whether `--interp-nodup` is on. |
+
+---
+
+## Citation and licence
+
+fastbamqc is released under the [MIT licence](LICENSE).
+
+If you use it, please cite it using the metadata in [`CITATION.cff`](CITATION.cff) (GitHub shows a *Cite this repository* button). The citation of the article and the DOI of the archived release will be added here once available.
+
+Changes between versions are listed in [`CHANGELOG.md`](CHANGELOG.md).

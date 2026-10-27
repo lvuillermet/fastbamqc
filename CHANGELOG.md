@@ -3,6 +3,10 @@
 All notable changes to fastbamqc are documented in this file.
 The format follows Keep a Changelog and the project uses Semantic Versioning.
 
+## [1.0.1] - 2026-10-27
+
+### Fixed 
+- Syntax error in `pyproject.toml` (unclosed quote) that prevent building the package in 1.0.0. 
 ## [1.0.0] - 2026-10-27
 
 First public release.

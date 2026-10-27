@@ -8,7 +8,7 @@ abstract: >-
   fastbamqc computes mapping and depth metrics (percentage mapped, mean depth, percentage of positions covered at
   least X-fold) and an interpretability verdict for sorted, indexed BAM files, for whole genomes and for
   amplicon / panel data, with an optional self-contained HTML report.
-version: 1.0.0
+version: 1.0.1
 date-released: 2026-10-27
 license: MIT
 repository-code: "https://github.com/lvuillermet/fastbamqc"

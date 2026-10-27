@@ -1,3 +1,7 @@
+CHANGELOG.md
+CITATION.cff
+LICENSE
+MANIFEST.in
 README.md
 pyproject.toml
 src/fastbamqc/__init__.py
