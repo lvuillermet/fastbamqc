@@ -3,6 +3,11 @@
 All notable changes to fastbamqc are documented in this file.
 The format follows Keep a Changelog and the project uses Semantic Versioning.
 
+## [1.0.2a]
+### Changed
+- Incorporated the html template after test of the version
+
+
 ## [1.0.2]
 ### Fixed
 - An unreadable BAM file (empty, truncated, not a BAM) found first in the input directory no longer produces the
