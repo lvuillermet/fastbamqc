@@ -3,12 +3,25 @@
 All notable changes to fastbamqc are documented in this file.
 The format follows Keep a Changelog and the project uses Semantic Versioning.
 
-## [1.0.1] - 2026-10-27
+## [1.0.2]
+### Fixed
+- An unreadable BAM file (empty, truncated, not a BAM) found first in the input directory no longer produces the
+  misleading message "Invalid BED: file does not contain alignment data": the BED is checked against the first
+  readable BAM, and the unreadable files are reported as `FAILED` without stopping the other samples.
 
+### Changed
+- HTML report on large data sets: tables are paginated (100 rows per page by default, sort and filter act on all
+  the rows, the CSV download contains all the filtered rows) and the targets x samples heatmap is drawn on a single
+  canvas. A report with 57,600 rows (1,920 samples x 30 targets) now opens in about 1.6 s on the test machine,
+  with about 10,000 page elements instead of an estimated one million.
+
+
+## [1.0.1] - 2026-10-27
 ### Fixed 
 - Syntax error in `pyproject.toml` (unclosed quote) that prevent building the package in 1.0.0. 
-## [1.0.0] - 2026-10-27
 
+
+## [1.0.0] - 2026-10-27
 First public release.
 
 ### Features

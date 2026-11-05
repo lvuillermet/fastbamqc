@@ -481,15 +481,28 @@ def main(argv=None):
         merge = (args.same_gene or "merge") == "merge"
         try:
             targets = load_bed(args.bed, merge_same_name=merge)
-            # Check the contig names against the header of the first BAM: fail right
-            # away instead of getting N identical failures (e.g. 'chr1' vs '1').
-            with pysam.AlignmentFile(bams[0], "rb") as first:
-                unknown = missing_contigs(targets, first.references)
-            if unknown:
-                raise ValueError(f"BED contig(s) not found in the BAM: {unknown[:5]} "
-                                 "(different 'chr' prefix between BED and BAM?)")
         except (OSError, ValueError) as exc:
             log.error("Invalid BED: %s", exc)
+            return 2
+        # Check the contig names against the header of the first readable BAM: fail right
+        # away instead of getting N identical failures (e.g. 'chr1' vs '1'). A BAM that
+        # cannot be opened (empty, truncated, not a BAM) is only reported here: it will be
+        # listed as FAILED below, without stopping the other samples.
+        references = None
+        for path in bams:
+            try:
+                with pysam.AlignmentFile(path, "rb") as first:
+                    references = first.references
+                break
+            except (OSError, ValueError) as exc:
+                log.warning("Cannot read %s: %s", os.path.basename(path), exc)
+        if references is None:
+            log.error("None of the BAM files can be read.")
+            return 2
+        unknown = missing_contigs(targets, references)
+        if unknown:
+            log.error("Invalid BED: BED contig(s) not found in the BAM: %s "
+                      "(different 'chr' prefix between BED and BAM?)", unknown[:5])
             return 2
         n_bp = sum(e - st for t in targets for ivs in t["intervals"].values() for st, e in ivs)
         log.info("Amplicon/panel mode: %d target(s), %d bp (%s)", len(targets), n_bp,

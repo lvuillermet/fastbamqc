@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <code>v1.0.0</code> &nbsp;·&nbsp; Python ≥ 3.9 &nbsp;·&nbsp; Linux / macOS (Windows through WSL)
+  <code>v1.0.2</code> &nbsp;·&nbsp; Python ≥ 3.9 &nbsp;·&nbsp; Linux / macOS (Windows through WSL)
 </p>
 
 ---
@@ -64,52 +64,7 @@ fastbamqc needs **Python ≥ 3.9** and two libraries, installed automatically: [
 
 > **Windows:** `pysam` does not run on native Windows. Install WSL (Ubuntu) and follow the Linux instructions inside it.
 
-### Option A: from the repository, in a Python virtual environment (`venv`)
-
-Works on any machine with Python 3.9+ and `git` (check with `python3 --version`).
-
-```bash
-# 1. get the code
-git clone https://github.com/lvuillermet/fastbamqc.git
-cd fastbamqc
-
-# 2. create and activate a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate          # Linux / macOS / WSL
-
-# 3. install
-pip install --upgrade pip
-pip install .
-
-# 4. check
-fastbamqc --version
-```
-
-No `git`? Download the repository as a zip archive from GitHub (green **Code** button → **Download ZIP**), unzip it,
-`cd` into the folder and continue at step 2.
-
-Next time, only `source .venv/bin/activate` is needed before using `fastbamqc`.
-To update: `git pull`, then `pip install .` again.
-For development, use `pip install -e .`: code changes are then picked up immediately.
-
-> On Debian / Ubuntu, if `python3 -m venv` fails, install the module first: `sudo apt install python3-venv`.
-
-### Option B: from the repository, in a conda / mamba / micromamba environment
-
-```bash
-git clone https://github.com/lvuillermet/fastbamqc.git
-cd fastbamqc
-
-micromamba create -n fastbamqc -c conda-forge -c bioconda python=3.11 pysam numpy samtools
-micromamba activate fastbamqc
-pip install .
-
-fastbamqc --version
-```
-
-(`conda` or `mamba` work the same way in place of `micromamba`.) `samtools` is only there to sort and index BAM files.
-
-### Option C: PyPI and Bioconda (coming soon)
+### PyPI and Bioconda (coming soon)
 
 Once the package is published, these one-line installations will be available:
 
@@ -117,8 +72,6 @@ Once the package is published, these one-line installations will be available:
 pip install fastbamqc                                    # PyPI
 conda install -c conda-forge -c bioconda fastbamqc       # Bioconda
 ```
-
-Until then, use options A or B.
 
 ---
 
