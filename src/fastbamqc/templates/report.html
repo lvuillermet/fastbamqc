@@ -138,7 +138,7 @@ footer code{background:var(--card);border:1px solid var(--line);border-radius:6p
 </main>
 <footer id="foot"></footer>
 
-<script id="report-data" type="application/json">__DATA__</script>
+<script id="report-data" type="text/plain">__DATA__</script>
 __DETAILS__
 <script>
 (function () {
@@ -146,7 +146,108 @@ __DETAILS__
 
 /* ====================================================================== data */
 const $ = (id) => document.getElementById(id);
-const D = JSON.parse($("report-data").textContent);
+
+/* ---- compact payload: base64( uint32 size + deflate( uint32 json size + json + varint integers ) ) */
+/* minimal inflate (RFC 1951) -- decoder for the compact report payload */
+function inflate(src, outLen) {
+  const out = new Uint8Array(outLen);
+  let pos = 0, bitBuf = 0, bitCnt = 0, o = 0;
+  function bits(n) {
+    while (bitCnt < n) { if (pos >= src.length) throw new Error("inflate: unexpected end"); bitBuf |= src[pos++] << bitCnt; bitCnt += 8; }
+    const v = bitBuf & ((1 << n) - 1); bitBuf >>>= n; bitCnt -= n; return v;
+  }
+  function build(lengths, n) {                       // canonical Huffman table (count/symbol arrays)
+    const count = new Uint16Array(16), symbol = new Uint16Array(n), offs = new Uint16Array(16);
+    for (let i = 0; i < n; i++) count[lengths[i]]++;
+    count[0] = 0;
+    for (let i = 1; i < 16; i++) offs[i] = offs[i - 1] + count[i - 1];
+    for (let i = 0; i < n; i++) if (lengths[i]) symbol[offs[lengths[i]]++] = i;
+    return { count: count, symbol: symbol };
+  }
+  function decode(t) {
+    let code = 0, first = 0, index = 0;
+    for (let len = 1; len < 16; len++) {
+      code |= bits(1);
+      const c = t.count[len];
+      if (code - c < first) return t.symbol[index + (code - first)];
+      index += c; first += c; first <<= 1; code <<= 1;
+    }
+    throw new Error("inflate: bad code");
+  }
+  const LB = [3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258];
+  const LE = [0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0];
+  const DB = [1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577];
+  const DE = [0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13];
+  let FIXL = null, FIXD = null;
+  let last = 0;
+  while (!last) {
+    last = bits(1);
+    const type = bits(2);
+    if (type === 0) {
+      bitBuf = 0; bitCnt = 0;
+      const len = src[pos] | (src[pos + 1] << 8); pos += 4;
+      for (let i = 0; i < len; i++) out[o++] = src[pos++];
+      continue;
+    }
+    let lt, dt;
+    if (type === 1) {
+      if (!FIXL) {
+        const l = new Uint8Array(288); l.fill(8, 0, 144); l.fill(9, 144, 256); l.fill(7, 256, 280); l.fill(8, 280, 288);
+        FIXL = build(l, 288); FIXD = build(new Uint8Array(30).fill(5), 30);
+      }
+      lt = FIXL; dt = FIXD;
+    } else if (type === 2) {
+      const nlen = bits(5) + 257, ndist = bits(5) + 1, ncode = bits(4) + 4;
+      const ORDER = [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];
+      const cl = new Uint8Array(19);
+      for (let i = 0; i < ncode; i++) cl[ORDER[i]] = bits(3);
+      const ct = build(cl, 19), lens = new Uint8Array(nlen + ndist);
+      let i = 0;
+      while (i < nlen + ndist) {
+        const s = decode(ct);
+        if (s < 16) lens[i++] = s;
+        else {
+          let prev = 0, rep;
+          if (s === 16) { prev = lens[i - 1]; rep = 3 + bits(2); }
+          else if (s === 17) rep = 3 + bits(3);
+          else rep = 11 + bits(7);
+          while (rep--) lens[i++] = prev;
+        }
+      }
+      lt = build(lens.subarray(0, nlen), nlen); dt = build(lens.subarray(nlen), ndist);
+    } else throw new Error("inflate: bad block");
+    for (;;) {
+      const s = decode(lt);
+      if (s < 256) out[o++] = s;
+      else if (s === 256) break;
+      else {
+        const l = LB[s - 257] + bits(LE[s - 257]), ds = decode(dt), d = DB[ds] + bits(DE[ds]);
+        for (let k = 0; k < l; k++, o++) out[o] = out[o - d];
+      }
+    }
+  }
+  return out;
+}
+function unpack(text) {
+  const bin = atob(text.trim()), z = new Uint8Array(bin.length - 4);
+  for (let i = 0; i < z.length; i++) z[i] = bin.charCodeAt(i + 4);
+  const size = (bin.charCodeAt(0) | (bin.charCodeAt(1) << 8) | (bin.charCodeAt(2) << 16) | (bin.charCodeAt(3) << 24)) >>> 0;
+  const raw = inflate(z, size), n = (raw[0] | (raw[1] << 8) | (raw[2] << 16) | (raw[3] << 24)) >>> 0;
+  return { obj: JSON.parse(new TextDecoder("utf-8").decode(raw.subarray(4, 4 + n))), raw: raw, pos: 4 + n };
+}
+function readInts(pk, count, div) {          // next run of `count` integers (differences), divided by `div`
+  const raw = pk.raw, out = new Array(count);
+  let p = pk.pos, prev = 0;
+  for (let i = 0; i < count; i++) {
+    let z = 0, shift = 0, b;
+    do { b = raw[p++]; z += (b & 127) * Math.pow(2, shift); shift += 7; } while (b & 128);
+    prev += (z % 2 ? -(z + 1) / 2 : z / 2);
+    out[i] = prev / div;
+  }
+  pk.pos = p; return out;
+}
+const PK = unpack($("report-data").textContent), D = PK.obj;
+if (D.grid && D.grid.n) { D.grid.rows = []; for (let i = 0; i < D.grid.n; i++) D.grid.rows.push(readInts(PK, D.grid.x.length, 1)); }
 const PALETTE = ["#4f86f0", "#e8743b", "#19a979", "#945ecf", "#e8a317", "#13a4b4", "#d9534f", "#6f7f95"];
 const FONT = "font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif";
 const COLS = D.columns, DEPTHS = D.depths, RULE = D.interp, GENOME = D.mode === "genome";
@@ -165,7 +266,12 @@ ROWS.forEach((r) => { BY[r.sample].push(r); });
 const IDX = {}; D.samples.forEach((s, i) => { IDX[s] = i; });
 const DETAIL = {};
 function detail(s) {                       // per-sample extra data, parsed lazily
-  if (!(s in DETAIL)) { const el = $("detail-" + IDX[s]); DETAIL[s] = el ? JSON.parse(el.textContent) : null; }
+  if (!(s in DETAIL)) {
+    const el = $("detail-" + IDX[s]);
+    let d = null;
+    if (el) { const pk = unpack(el.textContent); d = pk.obj; if (d && d.profiles) d.profiles.forEach((p) => { p.depth = readInts(pk, p.n, 10); }); }
+    DETAIL[s] = d;
+  }
   return DETAIL[s];
 }
 const isOK = (r) => !!r && r.interpretability === "INTERPRETABLE";
@@ -350,7 +456,8 @@ function barChart(host, o) {
   o.series.forEach((s) => s.values.forEach((v) => { if (v != null && v > vmax) vmax = v; }));
   if (o.range) o.range.hi.forEach((v) => { if (v > vmax) vmax = v; });
   (o.hlines || []).forEach((l) => { if (l.y > vmax) vmax = l.y; });
-  const ax = axis(o.ymax != null ? o.ymax : vmax, 5), Y = (v) => MT + innerH - v / ax.max * innerH;
+  const ax = o.log ? yScale(vmax, true, MT, innerH) : axis(o.ymax != null ? o.ymax : vmax, 5);   // log: log10(1 + v), ticks at 0, 1, 10, 100...
+  const Y = o.log ? ax.Y : (v) => MT + innerH - v / ax.max * innerH;
   const svg = sv("svg", { width: r1(svgW), height: H, viewBox: "0 0 " + r1(svgW) + " " + H, style: FONT + ";display:block", role: "img" });
   ax.ticks.forEach((t) => {
     svg.appendChild(sv("line", { x1: ML, x2: ML + innerW, y1: r1(Y(t)), y2: r1(Y(t)), style: "stroke:var(--grid)" }));
@@ -486,8 +593,9 @@ function heatmap(host, o) {
   const svg = sv("svg", { width: r1(svgW), height: r1(svgH), viewBox: "0 0 " + r1(svgW) + " " + r1(svgH), style: FONT + ";display:block", role: "img" });
   const colStep = Math.max(1, Math.ceil(12 / cw));                       // label one column out of N when they are narrow
   o.cols.forEach((c, j) => { if (j % colStep === 0) svg.appendChild(T(ML + cw * j + cw / 2 + 2, MT - 6, trunc(c, 22), { anchor: "start", rot: -50, size: 10 })); });
-  o.rows.forEach((rl, i) => svg.appendChild(T(ML - 6, MT + ch * i + ch / 2 + 4, trunc(rl, 30), { anchor: "end", size: ch < 16 ? 9 : 11 })));
-  if (!ctx) {                                                            // fallback (no canvas): one SVG rect per cell
+  const rowLabels = o.rows.map((rl, i) => T(ML - 6, MT + ch * i + ch / 2 + 4, trunc(rl, 30), { anchor: "end", size: ch < 16 ? 9 : 11 }));
+  if (!ctx) {
+    rowLabels.forEach((t) => svg.appendChild(t));                                                            // fallback (no canvas): one SVG rect per cell
     o.rows.forEach((rl, i) => {
       for (let j = 0; j < nc; j++) {
         const v = o.value(i, j);
@@ -523,8 +631,11 @@ function heatmap(host, o) {
     }
   }
   svg.style.cssText += ";position:absolute;left:0;top:0;pointer-events:none";
+  // row labels: their own SVG, sticky on the left so the names stay visible when the grid is scrolled sideways
+  const rsvg = sv("svg", { width: r1(ML), height: r1(svgH), viewBox: "0 0 " + r1(ML) + " " + r1(svgH), style: FONT + ";display:block;position:sticky;left:0;z-index:2;background:var(--card)" });
+  rowLabels.forEach((t) => rsvg.appendChild(t));
   const box = h("div", { style: "position:relative;width:" + r1(svgW) + "px;height:" + r1(svgH) + "px" });
-  box.appendChild(cv); box.appendChild(svg); host.appendChild(box);
+  box.appendChild(cv); box.appendChild(svg); box.appendChild(rsvg); host.appendChild(box);
   cv.addEventListener("mousemove", (ev) => {
     const b = cv.getBoundingClientRect(), j = Math.floor((ev.clientX - b.left) / cw), i = Math.floor((ev.clientY - b.top) / ch);
     if (i < 0 || j < 0 || i >= nr || j >= nc) { hideTip(); return; }
@@ -786,10 +897,15 @@ function overviewAmplicon(root) {
   }
   const perGene = GENE_ROWS.map((_, g) => BY && S.map((s) => BY[s][g]).filter(Boolean));
   const med = perGene.map((a) => median(a.map((r) => r.mean_coverage)));
-  barChart(panel(two, "Mean coverage per target", "Median across samples (bar) and min\u2013max (whiskers), in target order"), {
-    labels: GENE_LABELS, height: 280, yLabel: "mean depth (X)", fmt: (v, s, i) => "median " + fx(v, 1) + "X  (min " + fx(Math.min.apply(null, perGene[i].map((r) => r.mean_coverage)), 1) + ", max " + fx(Math.max.apply(null, perGene[i].map((r) => r.mean_coverage)), 1) + ")",
-    series: [{ name: "median", color: "var(--bar)", values: med }],
-    range: { lo: perGene.map((a) => Math.min.apply(null, a.map((r) => r.mean_coverage))), hi: perGene.map((a) => Math.max.apply(null, a.map((r) => r.mean_coverage))) } });
+  const tgtHost = panel(two, "Mean coverage per target", "Median across samples (bar) and min\u2013max (whiskers), in target order",
+    h("div", { class: "ctrl" }, [checkbox("Log scale", ST.logTarget, (c) => { ST.logTarget = c; drawTargets(); })]));
+  function drawTargets() {
+    barChart(tgtHost, {
+      labels: GENE_LABELS, height: 280, yLabel: "mean depth (X)", log: !!ST.logTarget, fmt: (v, s, i) => "median " + fx(v, 1) + "X  (min " + fx(Math.min.apply(null, perGene[i].map((r) => r.mean_coverage)), 1) + ", max " + fx(Math.max.apply(null, perGene[i].map((r) => r.mean_coverage)), 1) + ")",
+      series: [{ name: "median", color: "var(--bar)", values: med }],
+      range: { lo: perGene.map((a) => Math.min.apply(null, a.map((r) => r.mean_coverage))), hi: perGene.map((a) => Math.max.apply(null, a.map((r) => r.mean_coverage))) } });
+  }
+  drawTargets();
   if (RULE) {
     const rate = perGene.map((a) => (a.length ? a.filter(isOK).length / a.length * 100 : 0));
     const order = rate.map((_, i) => i).sort((a, b) => rate[a] - rate[b]);
@@ -945,7 +1061,7 @@ function renderSample() {
 }
 
 /* ============================================================ app / events */
-const ST = { tab: "overview", sample: D.samples[0], ovMetric: null, geneMetric: null, gene: 0, shared: true, log: false, dirty: { overview: true, sample: true } };
+const ST = { tab: "overview", sample: D.samples[0], ovMetric: null, geneMetric: null, gene: 0, shared: true, log: false, logTarget: false, dirty: { overview: true, sample: true } };
 
 function renderActive() { if (ST.tab === "overview") renderOverview(); else renderSample(); }
 function showTab(t) {

@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: fastbamqc
-Version: 1.0.2
+Version: 1.0.3
 Summary: Fast mapping and depth QC metrics for sorted, indexed BAM files (whole genome or amplicon/panel)
 Author-email: Loic Vuillermet <loic.vuillermet@univ-rouen.fr>, Anna Cosson <anna.cosson@u-paris.fr>, Romain Coppee <romain.coppee@univ-rouen.fr>
 License-Expression: MIT

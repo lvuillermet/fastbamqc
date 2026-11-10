@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fastbamqc"
-version = "1.0.2a"
+version = "1.0.3"
 description = "Fast mapping and depth QC metrics for sorted, indexed BAM files (whole genome or amplicon/panel)"
 readme = "README.md"
 license = "MIT"
