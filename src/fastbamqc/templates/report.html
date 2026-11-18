@@ -79,6 +79,14 @@ label.chk{font-size:12.5px;color:var(--muted);margin-left:10px;white-space:nowra
 .ctrl{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
 .picker{display:flex;align-items:center;gap:8px;margin-bottom:16px}
 .picker select{min-width:240px;font-size:15px;font-weight:600}
+.finder{position:relative;margin-left:10px}
+.finder input{width:230px}
+.findlist{position:absolute;left:0;top:calc(100% + 4px);min-width:100%;width:max-content;max-width:min(560px,90vw);max-height:320px;overflow:auto;
+  background:var(--card);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow),0 6px 20px rgba(20,30,60,.12);z-index:40;padding:4px}
+.findlist .it{padding:5px 9px;border-radius:6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.findlist .it.on{background:var(--hover)}
+.findlist .it mark{background:none;color:var(--accent);font-weight:700}
+.findlist .none,.findlist .more{padding:5px 9px;color:var(--muted);font-size:12px}
 .tools{display:flex;align-items:center;gap:10px;margin:6px 0 8px;flex-wrap:wrap}
 .tools .count{color:var(--muted);font-size:12px;flex:1}
 .tablewrap{overflow:auto;border:1px solid var(--line);border-radius:8px}
@@ -132,6 +140,11 @@ footer code{background:var(--card);border:1px solid var(--line);border-radius:6p
       <button type="button" class="btn" id="prev" title="Previous sample">&#9664;</button>
       <select id="sel" aria-label="Sample"></select>
       <button type="button" class="btn" id="next" title="Next sample">&#9654;</button>
+      <div class="finder">
+        <input type="search" id="find" class="filter" placeholder="Search a sample..." autocomplete="off" spellcheck="false"
+          role="combobox" aria-expanded="false" aria-controls="findlist" aria-label="Search a sample by any part of its name">
+        <div id="findlist" class="findlist" role="listbox" hidden></div>
+      </div>
     </div>
     <div id="sample-body"></div>
   </section>
@@ -235,7 +248,7 @@ function unpack(text) {
   const raw = inflate(z, size), n = (raw[0] | (raw[1] << 8) | (raw[2] << 16) | (raw[3] << 24)) >>> 0;
   return { obj: JSON.parse(new TextDecoder("utf-8").decode(raw.subarray(4, 4 + n))), raw: raw, pos: 4 + n };
 }
-function readInts(pk, count, div) {          // next run of `count` integers (differences), divided by `div`
+function readInts(pk, count, div) {
   const raw = pk.raw, out = new Array(count);
   let p = pk.pos, prev = 0;
   for (let i = 0; i < count; i++) {
@@ -251,21 +264,21 @@ if (D.grid && D.grid.n) { D.grid.rows = []; for (let i = 0; i < D.grid.n; i++) D
 const PALETTE = ["#4f86f0", "#e8743b", "#19a979", "#945ecf", "#e8a317", "#13a4b4", "#d9534f", "#6f7f95"];
 const FONT = "font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif";
 const COLS = D.columns, DEPTHS = D.depths, RULE = D.interp, GENOME = D.mode === "genome";
-const NODUP = !!(RULE && RULE.nodup);                                       // rule evaluated without the duplicate reads
+const NODUP = !!(RULE && RULE.nodup);
 const ruleCol = (depth) => depth + (NODUP ? "X_nodup" : "X");
-const bcol = (d) => d + (NODUP ? "X_nodup" : "X");                         // breadth-of-coverage column shown in charts
+const bcol = (d) => d + (NODUP ? "X_nodup" : "X");
 const histOf = (d) => (d ? (NODUP && d.hist_nd ? d.hist_nd : d.hist) : null);
 let RULE_COL = RULE ? ruleCol(RULE.depth) : null;
-const RULE0 = RULE ? { depth: RULE.depth, pct: RULE.pct } : null;          // values given on the command line
+const RULE0 = RULE ? { depth: RULE.depth, pct: RULE.pct } : null;
 const GRID = RULE && D.grid && D.grid.rows && D.grid.rows.length === D.rows.length ? D.grid : null;
-const XCAP = Math.max.apply(null, [200].concat(DEPTHS));                   // max depth (X) of the coverage curves
+const XCAP = Math.max.apply(null, [200].concat(DEPTHS));
 
 const ROWS = D.rows.map((r) => { const o = {}; COLS.forEach((c, i) => { o[c] = r[i]; }); return o; });
 const BY = {}; D.samples.forEach((s) => { BY[s] = []; });
 ROWS.forEach((r) => { BY[r.sample].push(r); });
 const IDX = {}; D.samples.forEach((s, i) => { IDX[s] = i; });
 const DETAIL = {};
-function detail(s) {                       // per-sample extra data, parsed lazily
+function detail(s) {
   if (!(s in DETAIL)) {
     const el = $("detail-" + IDX[s]);
     let d = null;
@@ -277,13 +290,13 @@ function detail(s) {                       // per-sample extra data, parsed lazi
 const isOK = (r) => !!r && r.interpretability === "INTERPRETABLE";
 
 /* ---- interpretability rule, adjustable from the header sliders */
-function activeCols() {                    // table columns: the rule depth column is added when --depths lacks it
+function activeCols() {
   const c = COLS.slice();
   if (RULE && c.indexOf(RULE_COL) < 0) { const i = c.indexOf("interpretability"); c.splice(i < 0 ? c.length : i, 0, RULE_COL); }
   return c;
 }
 function ruleSuffix() { return RULE ? "_" + RULE.depth + "X_" + RULE.pct + "pct" + (NODUP ? "_nodup" : "") : ""; }
-function applyRule(depth, pct) {           // recompute the depth column and the verdict of every row
+function applyRule(depth, pct) {
   RULE.depth = depth; RULE.pct = pct; RULE_COL = ruleCol(depth);
   const gi = GRID ? GRID.x.indexOf(depth) : -1, native = COLS.indexOf(RULE_COL) >= 0;
   ROWS.forEach((r, i) => {
@@ -292,7 +305,7 @@ function applyRule(depth, pct) {           // recompute the depth column and the
   });
 }
 
-// amplicon mode: targets are the same, in the same order, for every sample
+// amplicon mode
 const GENE_ROWS = GENOME ? [] : (BY[D.samples[0]] || []);
 const GENE_LABELS = (function () {
   const cnt = {}; GENE_ROWS.forEach((r) => { cnt[r.gene] = (cnt[r.gene] || 0) + 1; });
@@ -317,7 +330,7 @@ function sv(tag, attrs, text) {
   if (text != null) e.textContent = text;
   return e;
 }
-function T(x, y, str, o) {                 // SVG text
+function T(x, y, str, o) {
   o = o || {};
   const a = { x: r1(x), y: r1(y), "font-size": o.size || 11, "text-anchor": o.anchor || "start",
     style: "fill:" + (o.fill || "var(--muted)") + (o.weight ? ";font-weight:" + o.weight : "") };
@@ -335,9 +348,7 @@ function median(a) {
   const b = a.slice().sort((x, y) => x - y), m = b.length >> 1;
   return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2;
 }
-/* Width available to a chart. Inside a two-column grid (.two) the first panel is drawn while its
-   neighbour does not exist yet, so its measured width would be the full row: compute the final
-   column width from the grid instead. */
+
 function widthOf(host) {
   let w = host.clientWidth || 900;
   const pan = host.parentElement, grid = pan && pan.parentElement;
@@ -353,13 +364,13 @@ function niceStep(raw) {
   const e = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / e;
   return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * e;
 }
-function axis(max, n) {                    // rounded-up top
+function axis(max, n) {
   if (!(max > 0)) max = 1;
   const step = niceStep(max / (n || 5)), top = Math.ceil(max / step - 1e-9) * step, t = [];
   for (let v = 0; v <= top + step * 1e-6; v += step) t.push(+v.toPrecision(12));
   return { ticks: t, max: top };
 }
-function axisFit(max, n) {                 // domain = exactly [0, max]
+function axisFit(max, n) {
   if (!(max > 0)) max = 1;
   const step = niceStep(max / (n || 5)), t = [];
   for (let v = 0; v <= max + step * 1e-6; v += step) t.push(+v.toPrecision(12));
@@ -456,7 +467,7 @@ function barChart(host, o) {
   o.series.forEach((s) => s.values.forEach((v) => { if (v != null && v > vmax) vmax = v; }));
   if (o.range) o.range.hi.forEach((v) => { if (v > vmax) vmax = v; });
   (o.hlines || []).forEach((l) => { if (l.y > vmax) vmax = l.y; });
-  const ax = o.log ? yScale(vmax, true, MT, innerH) : axis(o.ymax != null ? o.ymax : vmax, 5);   // log: log10(1 + v), ticks at 0, 1, 10, 100...
+  const ax = o.log ? yScale(vmax, true, MT, innerH) : axis(o.ymax != null ? o.ymax : vmax, 5);
   const Y = o.log ? ax.Y : (v) => MT + innerH - v / ax.max * innerH;
   const svg = sv("svg", { width: r1(svgW), height: H, viewBox: "0 0 " + r1(svgW) + " " + H, style: FONT + ";display:block", role: "img" });
   ax.ticks.forEach((t) => {
@@ -475,7 +486,7 @@ function barChart(host, o) {
       tipOn(rect, () => String(lab) + "\n" + (ns > 1 ? s.name + ": " : "") + (o.fmt ? o.fmt(v, s, i) : fnum(v)));
       svg.appendChild(rect);
     });
-    if (o.range) {                          // whiskers min..max for the first series
+    if (o.range) {
       const xw = cx, lo = Y(o.range.lo[i]), hi = Y(o.range.hi[i]), st = "stroke:var(--ink);stroke-width:1";
       svg.appendChild(sv("line", { x1: r1(xw), x2: r1(xw), y1: r1(lo), y2: r1(hi), style: st }));
       svg.appendChild(sv("line", { x1: r1(xw - 3), x2: r1(xw + 3), y1: r1(hi), y2: r1(hi), style: st }));
@@ -524,7 +535,7 @@ function lineChart(host, o) {
   o.series.forEach((s) => {
     if (!s.x.length) return;
     let d = "", lastX = 0;
-    if (s.step) {                           // histogram-like: each y spans [x, x + dx]
+    if (s.step) {
       const dx = s.x.length > 1 ? s.x[1] - s.x[0] : 1;
       s.x.forEach((x, i) => { const y = r1(Y(s.y[i])); d += (i ? "L" : "M") + r1(X(x)) + "," + y + "L" + r1(X(x + dx)) + "," + y; });
       lastX = X(s.x[s.x.length - 1] + dx);
@@ -547,7 +558,7 @@ function lineChart(host, o) {
     if (l.label) svg.appendChild(T(x + 4, MT + 11, l.label, { fill: col, weight: 600 }));
   });
 
-  // hover: vertical cursor + values of every series at the nearest x
+  // hover
   const cursor = sv("line", { y1: MT, y2: MT + ih, style: "stroke:var(--muted);stroke-dasharray:3 3", visibility: "hidden" });
   svg.appendChild(cursor);
   const ov = sv("rect", { x: ML, y: MT, width: Math.max(0, iw), height: Math.max(0, ih), style: "fill:transparent" });
@@ -571,7 +582,7 @@ function lineChart(host, o) {
   host.appendChild(svg);
 }
 
-function cssColor(c) {                     // canvas cannot use var(--x): resolve it once per colour
+function cssColor(c) {
   const m = /^var\((--[\w-]+)\)$/.exec(c);
   return m ? getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() : c;
 }
@@ -583,19 +594,19 @@ function heatmap(host, o) {
   const ch = nr > 60 ? 13 : 18, ML = Math.min(190, 14 + Math.min(mr, 28) * 6.2), MT = Math.min(140, 18 + Math.min(mc, 20) * 5.2);
   const MR = Math.min(90, 10 + Math.min(mc, 22) * 3.2), MB = 8;
   const fit = (W - ML - MR) / Math.max(nc, 1);
-  let cw = nc <= 60 ? Math.max(16, Math.min(52, fit)) : Math.min(52, fit);   // many columns: shrink to fit the page
-  cw = Math.max(Math.min(cw, 30000 / Math.max(nc, 1)), 0.25);            // never wider than 30000 px (canvas limit)
-  if (nc > 60 && cw < 2 && 30000 / nc >= 2) cw = 2;                      // at least 2 px per column when it fits
+  let cw = nc <= 60 ? Math.max(16, Math.min(52, fit)) : Math.min(52, fit);
+  cw = Math.max(Math.min(cw, 30000 / Math.max(nc, 1)), 0.25);
+  if (nc > 60 && cw < 2 && 30000 / nc >= 2) cw = 2;
   const gw = cw * nc, gh = ch * nr;
   const svgW = ML + MR + gw, svgH = MT + MB + gh;
   let ctx = null, cv = null;
   if (typeof CanvasRenderingContext2D !== "undefined") { cv = document.createElement("canvas"); ctx = cv.getContext ? cv.getContext("2d") : null; }
   const svg = sv("svg", { width: r1(svgW), height: r1(svgH), viewBox: "0 0 " + r1(svgW) + " " + r1(svgH), style: FONT + ";display:block", role: "img" });
-  const colStep = Math.max(1, Math.ceil(12 / cw));                       // label one column out of N when they are narrow
+  const colStep = Math.max(1, Math.ceil(12 / cw));
   o.cols.forEach((c, j) => { if (j % colStep === 0) svg.appendChild(T(ML + cw * j + cw / 2 + 2, MT - 6, trunc(c, 22), { anchor: "start", rot: -50, size: 10 })); });
   const rowLabels = o.rows.map((rl, i) => T(ML - 6, MT + ch * i + ch / 2 + 4, trunc(rl, 30), { anchor: "end", size: ch < 16 ? 9 : 11 }));
   if (!ctx) {
-    rowLabels.forEach((t) => svg.appendChild(t));                                                            // fallback (no canvas): one SVG rect per cell
+    rowLabels.forEach((t) => svg.appendChild(t));
     o.rows.forEach((rl, i) => {
       for (let j = 0; j < nc; j++) {
         const v = o.value(i, j);
@@ -611,7 +622,7 @@ function heatmap(host, o) {
     host.appendChild(svg);
     return;
   }
-  // canvas: a single element for all the cells; one tooltip listener for the whole grid
+  // canvas
   const dpr = Math.max(0.25, Math.min(window.devicePixelRatio || 1, 2, 32000 / Math.max(gw, 1)));
   cv.width = Math.max(1, Math.round(gw * dpr)); cv.height = Math.max(1, Math.round(gh * dpr));
   cv.style.cssText = "position:absolute;left:" + r1(ML) + "px;top:" + r1(MT) + "px;width:" + r1(gw) + "px;height:" + r1(gh) + "px";
@@ -631,7 +642,7 @@ function heatmap(host, o) {
     }
   }
   svg.style.cssText += ";position:absolute;left:0;top:0;pointer-events:none";
-  // row labels: their own SVG, sticky on the left so the names stay visible when the grid is scrolled sideways
+
   const rsvg = sv("svg", { width: r1(ML), height: r1(svgH), viewBox: "0 0 " + r1(ML) + " " + r1(svgH), style: FONT + ";display:block;position:sticky;left:0;z-index:2;background:var(--card)" });
   rowLabels.forEach((t) => rsvg.appendChild(t));
   const box = h("div", { style: "position:relative;width:" + r1(svgW) + "px;height:" + r1(svgH) + "px" });
@@ -644,7 +655,7 @@ function heatmap(host, o) {
   cv.addEventListener("mouseleave", hideTip);
 }
 
-function spark(p, ymax, thr, log, color, w, hh) {   // small depth profile (amplicon gallery)
+function spark(p, ymax, thr, log, color, w, hh) {
   const svg = sv("svg", { width: w, height: hh, viewBox: "0 0 " + w + " " + hh });
   const ty = (v) => (log ? Math.log10(1 + Math.max(0, v)) : v), top = ty(Math.max(ymax, thr || 0)) || 1;
   const X = (i) => 3 + (p.depth.length > 1 ? i / (p.depth.length - 1) : 0.5) * (w - 6), Y = (v) => hh - 3 - ty(v) / top * (hh - 8);
@@ -665,10 +676,13 @@ function colsFor(noSample) {
     key: c, label: c, digits: dig(c),
     type: c === "interpretability" ? "verdict" : (["sample", "gene", "chrom"].indexOf(c) >= 0 ? "str" : "num") }));
 }
+const FILTERS = {};
 function dataTable(host, o) {
   host.innerHTML = "";
-  const st = { key: null, dir: 1, q: "", page: 0, size: 100 };
+  const saved = o.fkey ? (FILTERS[o.fkey] || "") : "";
+  const st = { key: null, dir: 1, q: saved.trim().toLowerCase(), page: 0, size: 100 };
   const input = h("input", { type: "search", placeholder: "Filter rows...", class: "filter" });
+  input.value = saved;
   const count = h("span", { class: "count" });
   const csv = h("button", { class: "btn", type: "button", text: "Download CSV" });
   const prev = h("button", { class: "btn", type: "button", text: "‹", "aria-label": "Previous page" });
@@ -679,10 +693,10 @@ function dataTable(host, o) {
   const table = h("table", { class: "tbl" }), tbody = h("tbody"), hr = h("tr");
   o.columns.forEach((c) => {
     const th = h("th", { text: c.label });
-    if (c.help) {                                  // small "?" with an explanation on hover
+    if (c.help) {
       const q = h("span", { class: "qm", text: "?", "aria-label": c.help });
       tipOn(q, wrapText(c.help, 52));
-      q.addEventListener("click", (e) => e.stopPropagation());   // do not sort when clicking the "?"
+      q.addEventListener("click", (e) => e.stopPropagation());
       th.appendChild(q);
     }
     th.addEventListener("click", () => { if (st.key === c.key) st.dir = -st.dir; else { st.key = c.key; st.dir = 1; } recompute(); draw(); });
@@ -693,10 +707,10 @@ function dataTable(host, o) {
   host.appendChild(h("div", { class: "tools" }, [input, count, pager, csv]));
   host.appendChild(wrap);
   let timer = null;
-  input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { st.q = input.value.trim().toLowerCase(); recompute(); draw(); }, 150); });
+  input.addEventListener("input", () => { if (o.fkey) FILTERS[o.fkey] = input.value; clearTimeout(timer); timer = setTimeout(() => { st.q = input.value.trim().toLowerCase(); recompute(); draw(); }, 150); });
   prev.addEventListener("click", () => { st.page--; draw(); });
   next.addEventListener("click", () => { st.page++; draw(); });
-  let rows = o.rows;                               // filtered + sorted rows; only one page of them is in the DOM
+  let rows = o.rows;
   function recompute() {
     rows = o.rows;
     if (st.q) rows = rows.filter((r) => o.columns.some((c) => String(r[c.key]).toLowerCase().indexOf(st.q) >= 0));
@@ -735,7 +749,7 @@ function dataTable(host, o) {
     pageLbl.textContent = "page " + fi(st.page + 1) + " / " + fi(pages);
     prev.disabled = st.page <= 0; next.disabled = st.page >= pages - 1;
     o.columns.forEach((c) => { c.th.className = (c.type === "num" ? "num " : "") + (st.key === c.key ? (st.dir > 0 ? "asc" : "desc") : ""); });
-    csv.onclick = () => {                          // the CSV holds ALL the filtered rows, not only the page shown
+    csv.onclick = () => {
       const esc = (v) => { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
       const cell = (r, c) => { const v = r[c.key]; return esc(c.digits != null && typeof v === "number" ? v.toFixed(c.digits) : v); };
       const lines = [o.columns.map((c) => esc(c.key)).join(",")].concat(rows.map((r) => o.columns.map((c) => cell(r, c)).join(",")));
@@ -757,12 +771,12 @@ function kvTable(host, pairs) {
 }
 
 /* ============================================================ distributions */
-function cumulative(hist) {                // y[i] = % of positions with depth >= i
+function cumulative(hist) {
   const total = sum(hist), y = new Array(hist.length); let run = total;
   for (let i = 0; i < hist.length; i++) { y[i] = total ? run / total * 100 : 0; run -= hist[i]; }
   return { y: y, total: total };
 }
-function xRange(cums) {                    // depth axis: up to ~the 99.5th percentile
+function xRange(cums) {
   let k = 0;
   cums.forEach((c) => { for (let i = 0; i < c.y.length; i++) if (c.y[i] >= 0.5 && i > k) k = i; });
   return Math.max(15, Math.ceil(k * 1.15));
@@ -816,7 +830,7 @@ function overviewGenome(root) {
     const drows = R.map((r) => ({ sample: r.sample, reads: r.primary_mapped_reads, est: r.est_dup_reads, pest: r.pct_est_dup, mark: r.marked_dup_reads,
       pmark: r.pct_marked_dup, cov: r.mean_coverage, cnd: r.mean_coverage_nodup,
       lost: r.mean_coverage > 0 ? (r.mean_coverage - r.mean_coverage_nodup) / r.mean_coverage * 100 : 0 }));
-    dataTable(panel(root, "Duplicates per sample", "Click a header to sort."), { rows: drows, maxHeight: 360, filename: "fastbamqc_duplicates", noRuleSuffix: true,
+    dataTable(panel(root, "Duplicates per sample", "Click a header to sort."), { rows: drows, maxHeight: 360, filename: "fastbamqc_duplicates", noRuleSuffix: true, fkey: "ov-dups",
       columns: [{ key: "sample", label: "sample", type: "str" }, { key: "reads", label: "primary_mapped_reads", help: "Primary mapped reads: mapped alignments that are neither secondary nor supplementary. Denominator of the duplicate percentages.", type: "num" },
         { key: "est", label: "est_dup_reads", help: "Reads estimated to be duplicates from the alignments alone: same start, end, strand and mate position as an earlier read (a duplicated pair counts as 2). Conservative: samtools markdup finds somewhat more.", type: "num" }, { key: "pest", label: "pct_est_dup", help: "est_dup_reads as a percentage of the primary mapped reads. High values mean low library complexity (low input, WGA or over-amplification).", type: "num", digits: 2 },
         { key: "mark", label: "marked_dup_reads", help: "Reads carrying the duplicate flag (0x400) in the BAM, i.e. already marked by Picard MarkDuplicates, samtools markdup... 0 means no marking was run, not that there are no duplicates.", type: "num" }, { key: "pmark", label: "pct_marked_dup", help: "marked_dup_reads as a percentage of the primary mapped reads.", type: "num", digits: 2 },
@@ -919,7 +933,7 @@ function renderOverview() {
   const root = $("tab-overview"); root.innerHTML = "";
   if (D.failed && D.failed.length) root.appendChild(h("div", { class: "warn", text: "Samples that failed and are NOT in this report: " + D.failed.join(", ") }));
   if (GENOME) overviewGenome(root); else overviewAmplicon(root);
-  dataTable(panel(root, "All results", "Every row of the main output table. Click a header to sort."), { columns: colsFor(false), rows: ROWS, filename: "fastbamqc_all_results", maxHeight: 520 });
+  dataTable(panel(root, "All results", "Every row of the main output table. Click a header to sort."), { columns: colsFor(false), rows: ROWS, filename: "fastbamqc_all_results", maxHeight: 520, fkey: "ov-all" });
   ST.dirty.overview = false;
 }
 
@@ -969,20 +983,9 @@ function sampleGenome(root, s) {
       labels: cs.map((c) => c.name), height: 300, yLabel: "mean depth (X)", fmt: (v, _s, i) => fx(v, 2) + "X  (" + fi(cs[i].length) + " bp)",
       series: [{ name: "mean depth", values: cs.map((c) => c.mean), color: "var(--bar)" }] });
     const rows = cs.map((c) => { const o = Object.assign({}, c); DEPTHS.forEach((x, i) => { o["p" + i] = c.pct[i]; }); return o; });
-    dataTable(panel(root, "Per-contig metrics", note), { rows: rows, maxHeight: 360, filename: "fastbamqc_" + s + "_contigs",
+    dataTable(panel(root, "Per-contig metrics", note), { rows: rows, maxHeight: 360, filename: "fastbamqc_" + s + "_contigs", fkey: "sm-contigs",
       columns: [{ key: "name", label: "contig", type: "str" }, { key: "length", label: "length", type: "num" }, { key: "mapped", label: "mapped_reads", type: "num" },
         { key: "mean", label: "mean_coverage", type: "num", digits: 2 }].concat(DEPTHS.map((x, i) => ({ key: "p" + i, label: x + "X", type: "num", digits: 2 }))) });
-  }
-  if (HAS_DUP) {
-    section(root, "Duplicates and read breakdown", "Estimated duplicates share start, end, strand and mate position with an earlier read; flagged ones carry the 0x400 flag.");
-    const tot = r.primary_mapped_reads || 0, p = (n) => (tot ? n / tot * 100 : 0);
-    const items = [["estimated duplicates", r.est_dup_reads], ["flagged duplicates", r.marked_dup_reads]];
-    barChart(panel(root, "Duplicates", "Reads (percentage of primary mapped reads in the tooltip)"), {
-      labels: items.map((x) => x[0]), height: 220, yLabel: "% of primary mapped reads", fmt: (v, _s, i) => fx(v, 2) + "%  (" + fi(items[i][1]) + " reads)",
-      series: [{ name: "reads", values: items.map((x) => p(x[1])), color: "var(--bar)" }] });
-    kvTable(panel(root, "Read breakdown", "Counts over mapped alignments"), [["primary mapped reads", r.primary_mapped_reads], ["properly paired (%)", r.pct_properly_paired],
-      ["MAPQ 0 (%)", r.pct_mapq0], ["secondary", r.secondary_reads], ["supplementary", r.supplementary_reads], ["QC-fail", r.qcfail_reads],
-      ["flagged duplicates", r.marked_dup_reads], ["estimated duplicates", r.est_dup_reads], ["mean coverage", r.mean_coverage], ["mean coverage without duplicates", r.mean_coverage_nodup]]);
   }
 }
 
@@ -995,7 +998,7 @@ function sampleAmplicon(root, s) {
   if (low) k.push({ label: "Lowest coverage", value: fx(low.mean_coverage, 1) + "X", sub: low.gene });
   kpis(root, k);
 
-  dataTable(panel(root, "Targets", "Results for this sample, one row per target. Click a header to sort."), { columns: colsFor(true), rows: rows, maxHeight: 400, filename: "fastbamqc_" + s });
+  dataTable(panel(root, "Targets", "Results for this sample, one row per target. Click a header to sort."), { columns: colsFor(true), rows: rows, maxHeight: 400, filename: "fastbamqc_" + s, fkey: "sm-targets" });
 
   // ---- bar chart per target, with a metric selector
   const metrics = ["mean_coverage"].concat(DEPTHS.map((x) => x + "X"), ["reads", "percentage_of_mapped"], SHAPE);
@@ -1014,7 +1017,6 @@ function sampleAmplicon(root, s) {
   }
   drawBars();
 
-  // ---- depth profiles: one large + a gallery of small multiples
   if (!d || !d.profiles || !d.profiles.length) return;
   const P = d.profiles;
   if (ST.gene >= P.length) ST.gene = 0;
@@ -1079,6 +1081,56 @@ function setSample(name, keepTab) {
   try { history.replaceState(null, "", "#sample=" + encodeURIComponent(name)); } catch (e) { /* file:// or sandbox */ }
   if (!keepTab) showTab("sample"); else renderSample();
 }
+/* search box */
+function setupFinder() {
+  const inp = $("find"), box = $("findlist"), MAXSHOW = 50;
+  let hits = [], active = 0;
+  function tokens() { return inp.value.toLowerCase().split(/\s+/).filter(Boolean); }
+  function mark(name, toks) {                       // name -> nodes with the matching parts highlighted
+    const low = name.toLowerCase(), on = new Array(name.length).fill(false);
+    toks.forEach((t) => { for (let i = low.indexOf(t); i >= 0; i = low.indexOf(t, i + 1)) for (let k = 0; k < t.length; k++) on[i + k] = true; });
+    const out = []; let i = 0;
+    while (i < name.length) {
+      let j = i; while (j < name.length && on[j] === on[i]) j++;
+      out.push(on[i] ? h("mark", { text: name.slice(i, j) }) : document.createTextNode(name.slice(i, j))); i = j;
+    }
+    return out;
+  }
+  function close() { box.hidden = true; inp.setAttribute("aria-expanded", "false"); }
+  function pick(name) { inp.value = ""; close(); setSample(name, true); inp.focus(); }
+  function paint() {
+    const toks = tokens();
+    if (!toks.length) { close(); return; }
+    const all = D.samples.filter((n) => { const l = n.toLowerCase(); return toks.every((t) => l.indexOf(t) >= 0); });
+    const first = toks[0];                          // names starting with the first word come first
+    hits = all.filter((n) => n.toLowerCase().indexOf(first) === 0).concat(all.filter((n) => n.toLowerCase().indexOf(first) !== 0));
+    active = 0; box.innerHTML = "";
+    if (!hits.length) box.appendChild(h("div", { class: "none", text: "No sample matches" }));
+    hits.slice(0, MAXSHOW).forEach((n, i) => {
+      const it = h("div", { class: "it" + (i === 0 ? " on" : ""), role: "option", title: n }, mark(n, toks));
+      it.addEventListener("mousedown", (e) => { e.preventDefault(); pick(n); });          // before the input loses focus
+      it.addEventListener("mousemove", () => highlight(i));
+      box.appendChild(it);
+    });
+    if (hits.length > MAXSHOW) box.appendChild(h("div", { class: "more", text: fi(hits.length - MAXSHOW) + " more: type more characters to narrow down" }));
+    box.hidden = false; inp.setAttribute("aria-expanded", "true");
+  }
+  function highlight(i) {
+    const items = box.querySelectorAll(".it"); if (!items.length) return;
+    active = Math.max(0, Math.min(items.length - 1, i));
+    items.forEach((e, k) => e.classList.toggle("on", k === active));
+    items[active].scrollIntoView({ block: "nearest" });
+  }
+  inp.addEventListener("input", paint);
+  inp.addEventListener("focus", paint);
+  inp.addEventListener("blur", close);
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); if (box.hidden) paint(); else highlight(active + 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); highlight(active - 1); }
+    else if (e.key === "Enter") { if (!box.hidden && hits.length) { e.preventDefault(); pick(hits[active]); } }
+    else if (e.key === "Escape") { if (inp.value) inp.value = ""; close(); }
+  });
+}
 function step(delta) { setSample(D.samples[(IDX[ST.sample] + delta + D.samples.length) % D.samples.length], true); }
 
 function ruleText() { return "Interpretable: \u2265 " + RULE.pct + "% at \u2265 " + RULE.depth + "X" + (NODUP ? " (no duplicates)" : ""); }
@@ -1103,7 +1155,7 @@ function setupRule() {
     note.title = same ? "Values of the command line. Move the sliders to re-evaluate every result live; the tables and CSV downloads follow."
       : "Modified from the command line values (\u2265 " + RULE0.pct + "% at \u2265 " + RULE0.depth + "X). Tables and CSV downloads use the modified values.";
   }
-  function refresh() {                     // redraw once per frame, keeping the scroll position
+  function refresh() {
     show();
     if (queued) return; queued = true;
     requestAnimationFrame(() => {
@@ -1126,6 +1178,7 @@ function boot() {
   D.samples.forEach((s) => sel.appendChild(h("option", { value: s, text: s })));
   sel.addEventListener("change", () => setSample(sel.value, true));
   $("prev").addEventListener("click", () => step(-1)); $("next").addEventListener("click", () => step(1));
+  setupFinder();
   document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.getAttribute("data-tab"))));
   const foot = $("foot");
   foot.appendChild(h("div", { text: "Generated by fastbamqc v" + D.version + " on " + D.generated + ". Command:" }));

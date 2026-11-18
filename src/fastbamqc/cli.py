@@ -25,7 +25,7 @@ import pysam
 
 from . import __version__
 from .core import (INTERPRETABLE, analyze_bam, analyze_targets, interpretability_label,
-                   load_bed, make_grid, missing_contigs, output_columns)
+                load_bed, make_grid, missing_contigs, output_columns)
 from .report import write_report
 
 log = logging.getLogger("fastbamqc")
@@ -35,27 +35,23 @@ log = logging.getLogger("fastbamqc")
 # Utilities
 # ----------------------------------------------------------------------------
 def find_bams(input_dir, pattern):
-    """Sorted list of the files of the directory matching the pattern (e.g. *_sorted.bam)."""
+    """Sorted list of the files of the directory matching the pattern"""
     return sorted(glob.glob(os.path.join(input_dir, pattern)))
 
 
 def sample_name(path, pattern):
     """
-    Sample name = file name without the fixed part of the pattern.
-    "S1_sorted.bam" with "*_sorted.bam" -> "S1".
-    (The suffix is removed only at the END of the name, not at every occurrence.)
+    Sample name = file name without the fixed part of the pattern
     """
     name = os.path.basename(path)
-    # The suffix only makes sense if the pattern contains a star; without a star
-    # (e.g. "S1.bam") it would equal the whole file name and the sample would be empty.
     suffix = pattern.split("*")[-1] if "*" in pattern else ""
     if suffix and name.endswith(suffix) and len(name) > len(suffix):
         return name[: -len(suffix)]
-    return os.path.splitext(name)[0]         # fallback: file name without extension
+    return os.path.splitext(name)[0]
 
 
 def _depth_list(text):
-    """Parse '1,5,10,30' -> [1, 5, 10, 30] (argparse type)."""
+    """Parse '1,5,10,30' -> [1, 5, 10, 30]"""
     try:
         depths = sorted({int(x) for x in text.split(",") if x.strip()})
     except ValueError:
@@ -67,11 +63,7 @@ def _depth_list(text):
 
 def _worker(task):
     """
-    Runs in a child process: analyses ONE BAM and returns (sample, rows, extra, error):
-    rows = LIST of rows (whole genome: 1 row; amplicon/panel: 1 row per target),
-    extra = detailed data for the report (None unless --report).
-    Exceptions are never raised here: the error is sent back to the parent
-    process, which decides what to do (one failing BAM must not block the others).
+    Runs in a child process: analyses ONE BAM and returns (sample, rows, extra, error)
     """
     bam_path, sample, kwargs, targets, interp = task
     try:
@@ -80,16 +72,16 @@ def _worker(task):
             rows = [result]
         else:
             rows, extra = analyze_targets(bam_path, targets, **kwargs)
-        if interp is not None:               # (depth, percentage): add the verdict column
+        if interp is not None:
             for r in rows:
                 r["interpretability"] = interpretability_label(r, *interp)
         return sample, [{"sample": sample, **r} for r in rows], extra, None
-    except Exception as exc:                 # noqa: BLE001 (deliberately broad)
+    except Exception as exc:
         return sample, None, None, f"{type(exc).__name__}: {exc}"
 
 
 class _NoDaemonProcess(multiprocessing.Process):
-    """A process allowed to start its own processes (each BAM then shares its windows)."""
+    """A process allowed to start its own processes"""
     @property
     def daemon(self):
         return False
@@ -107,8 +99,8 @@ class _NestablePool(multiprocessing.pool.Pool):
 
 
 def _run(tasks, jobs, nested=False):
-    """Iterates over the results as they come in. nested=True: each task starts processes too."""
-    if jobs == 1:                            # no Pool: simpler to debug (a BAM can still use workers)
+    """Iterates over the results as they come in"""
+    if jobs == 1:
         yield from map(_worker, tasks)
     else:
         with (_NestablePool if nested else Pool)(processes=jobs) as pool:
@@ -116,14 +108,14 @@ def _run(tasks, jobs, nested=False):
 
 
 def _fmt(value):
-    """Decimal numbers -> exactly 2 decimals (98.2 -> '98.20'); None -> 'NA'; else unchanged."""
+    """Decimal numbers -> exactly 2 decimals; None -> 'NA'; else unchanged"""
     if value is None:
         return "NA"
     return f"{value:.2f}" if isinstance(value, float) else value
 
 
 def write_table(rows, columns, path, fmt):
-    """Writes the table as tsv / csv (decimals with 2 digits)."""
+    """Writes the table as tsv / csv"""
     if fmt in ("tsv", "csv"):
         with open(path, "w", newline="") as fh:
             writer = csv.DictWriter(fh, fieldnames=columns,
@@ -135,40 +127,36 @@ def write_table(rows, columns, path, fmt):
 # ----------------------------------------------------------------------------
 # Help display
 # ----------------------------------------------------------------------------
-DEFAULT_INTERP_DEPTH = 10      # interpretability rule used unless --interp-depth / --interp-pct / --no-interp
+DEFAULT_INTERP_DEPTH = 10
 DEFAULT_INTERP_PCT = 75.0
 
 BANNER = r"""
- _____ _    ____ _____ ____    _    __  __  ___   ____
-|  ___/ \  / ___|_   _| __ )  / \  |  \/  |/ _ \ / ___|
-| |_ / _ \ \___ \ | | |  _ \ / _ \ | |\/| | | | | |
-|  _/ ___ \ ___) || | | |_) / ___ \| |  | | |_| | |___
-|_|/_/   \_\____/ |_| |____/_/   \_\_|  |_|\__\_\\____|
+ _____  _    ____  _____  ____     _     __  __   ___    ____
+|  ___|/ \  / ___||_   _|| __ )   / \   |  \/  | / _ \  / ___|
+| |_  / △ \ \___ \  | |  |  _ \  / △ \  | |\/| || | | || |
+|  _|/ ___ \ ___) | | |  | |_) |/ ___ \ | |  | || |_| || |___
+|_| /_/   \_\____/  |_|  |____//_/   \_\|_|  |_| \__\_\ \____|
 
 """
 TAGLINE = "Fast mapping & depth QC for sorted, indexed BAM files"
 
 
 def _use_color():
-    """Colours only on a real terminal, and never if NO_COLOR is set."""
+    """Colours only on a real terminal"""
     return sys.stdout.isatty() and "NO_COLOR" not in os.environ
 
 
 def _banner():
-    """Big software name + version + tagline, shown at the very top of the help."""
+    """Big software name + version + tagline"""
     art = "\n".join("  " + line for line in BANNER.strip("\n").splitlines())
     sub = f"  v{__version__}  |  {TAGLINE}"
     if _use_color():
-        art = f"\033[1;36m{art}\033[0m"      # bold cyan
-        sub = f"\033[2m{sub}\033[0m"         # dim
+        art = f"\033[1;36m{art}\033[0m"
+        sub = f"\033[2m{sub}\033[0m"
     return f"\n{art}\n\n{sub}\n\n"
 
 
 class _HelpFormatter(argparse.RawDescriptionHelpFormatter):
-    """
-    Airy help: upper-case section titles, a blank line after every option,
-    line breaks of descriptions/epilog preserved.
-    """
     def __init__(self, prog):
         super().__init__(prog, max_help_position=30)
 
@@ -182,7 +170,6 @@ class _HelpFormatter(argparse.RawDescriptionHelpFormatter):
         return super()._format_action(action) + "\n"
 
     def _format_action_invocation(self, action):
-        # "-i, --input-dir DIRECTORY" instead of "-i DIRECTORY, --input-dir DIRECTORY"
         if not action.option_strings or action.nargs == 0:
             return super()._format_action_invocation(action)
         metavar = self._format_args(action, self._get_default_metavar_for_optional(action))
@@ -196,9 +183,10 @@ class _Parser(argparse.ArgumentParser):
 
 
 EPILOG = """\
+
 EXAMPLES:
 
-  Whole genome, 16 cores in total, 2 threads per BAM (so 8 BAM files at a time):
+  Whole genome, 16 cores in total, 2 threads per BAM:
     fastbamqc -i ./bams -f "*_sorted.bam" -o ./results -c 16 -t 2
 
   Whole genome, selected chromosomes only, CSV output:
@@ -210,8 +198,7 @@ EXAMPLES:
   Amplicon-seq, BED lines sharing the same gene name analysed separately:
     fastbamqc -i ./bams -o ./results --bed amplicons.bed --same-gene separate
 
-  Interpretability is on by default: a row is INTERPRETABLE if at least 75% of it is
-  covered at >= 10X. Change the rule, or switch it off:
+  Interpretability is on by default: a row is INTERPRETABLE if at least 75% of it is covered at >= 10X. Change the rule, or switch it off:
     fastbamqc -i ./bams -o ./results --bed amplicons.bed --interp-depth 20 --interp-pct 90
     fastbamqc -i ./bams -o ./results --no-interp
 
@@ -251,9 +238,7 @@ REQUIREMENTS:
 # ----------------------------------------------------------------------------
 def _normalize_argv(argv):
     """
-    Accepts --out_dir as --out-dir: '_' is replaced by '-' in the NAME of long
-    options only (never in their values). This avoids declaring every option
-    twice, which would clutter the help.
+    Accepts --out_dir as --out-dir: '_' is replaced by '-' in the name of options
     """
     fixed = []
     for arg in argv:
@@ -271,18 +256,18 @@ def parse_args(argv=None):
         description="Fast mapping and depth metrics for sorted and indexed BAM files.",
         epilog=EPILOG,
         formatter_class=_HelpFormatter,
-        add_help=False,                      # -h is added below, in "other options"
+        add_help=False,
     )
 
     # --- Required argument ---
     g = p.add_argument_group("required")
     g.add_argument("-i", "--input-dir", dest="input_dir", required=True, metavar="DIRECTORY",
-                   help="Directory containing the BAM files.")
+                    help="Directory containing the BAM files.")
 
     # --- Input files ---
     g = p.add_argument_group("input files")
     g.add_argument("-f", "--pattern", default="*.bam", metavar="PATTERN",
-                   help='Pattern of the BAM files to analyse, e.g. "*_sorted.bam" '
+                    help='Pattern of the BAM files to analyse, e.g. "*_sorted.bam" '
                         '(default: "*.bam"). Sample names are the file names without '
                         "the fixed part of the pattern.")
 
@@ -294,42 +279,42 @@ def parse_args(argv=None):
         "With --bed: AMPLICON / PANEL. Depth is computed over the BED targets only;\n"
         "            one result row per gene (BED column 4) and per sample.\n")
     g.add_argument("-b", "--bed", metavar="FILE.bed",
-                   help="Enable amplicon/panel mode. BED columns: 1 chrom, 2 start (0-based), "
+                    help="Enable amplicon/panel mode. BED columns: 1 chrom, 2 start (0-based), "
                         "3 end, 4 gene name. Without a 4th column, targets are named "
                         "chrom:start-end.")
     g.add_argument("--same-gene", choices=["merge", "separate"], metavar="{merge,separate}",
-                   help="With --bed: how to handle several BED lines sharing the same gene "
+                    help="With --bed: how to handle several BED lines sharing the same gene "
                         "name. 'merge' (default) groups them into ONE target whose regions "
                         "are merged; 'separate' treats every line as an independent target.")
     g.add_argument("--contigs", metavar="CONTIGS",
-                   type=lambda s: [c for c in s.split(",") if c],
-                   help="Whole-genome mode only: restrict the analysis to these "
-                        "comma-separated contigs, e.g. chr1,chr2,chrX (default: all contigs "
+                    type=lambda s: [c for c in s.split(",") if c],
+                    help="Whole-genome mode only: restrict the analysis to these "
+                    "comma-separated contigs, e.g. chr1,chr2,chrX (default: all contigs "
                         "of the BAM header). Cannot be combined with --bed.")
 
     # --- Output ---
     g = p.add_argument_group("output")
     g.add_argument("-o", "--out-dir", dest="out_dir", default=".", metavar="DIRECTORY",
-                   help="Output directory, created if needed (default: current directory).")
+                    help="Output directory, created if needed (default: current directory).")
     g.add_argument("-F", "--out-format", dest="out_format", default="tsv",
-                   choices=["tsv", "csv"], metavar="{tsv,csv}",
-                   help="Format of the output tables (default: tsv).")
+                    choices=["tsv", "csv"], metavar="{tsv,csv}",
+                    help="Format of the output tables (default: tsv).")
     g.add_argument("-n", "--out-name", dest="out_name", default="fastbamqc_summary",
-                   metavar="NAME",
-                   help="Name of the main output file, without extension "
+                    metavar="NAME",
+                    help="Name of the main output file, without extension "
                         "(default: fastbamqc_summary).")
 
     # --- Depth and filters ---
     g = p.add_argument_group("depth and filters")
     g.add_argument("-d", "--depths", type=_depth_list, default=[1, 5, 10], metavar="THRESHOLDS",
-                   help="Comma-separated depth thresholds. One <d>X column is reported per "
+                    help="Comma-separated depth thresholds. One <d>X column is reported per "
                         "threshold: the percentage of positions covered by at least d reads "
                         "(default: 1,5,10).")
     g.add_argument("-q", "--min-mapq", type=int, default=0, metavar="MAPQ",
-                   help="Minimum mapping quality (MAPQ) for a read to be counted in the "
+                    help="Minimum mapping quality (MAPQ) for a read to be counted in the "
                         "depth (default: 0).")
     g.add_argument("--exclude-flags", type=lambda s: int(s, 0), default=0, metavar="FLAGS",
-                   help="SAM flags to exclude from the depth, decimal or 0x.. format "
+                    help="SAM flags to exclude from the depth, decimal or 0x.. format "
                         "(default: 0; unmapped reads are always excluded). E.g. 1024 = "
                         "duplicates, 3584 = duplicates + secondary + supplementary. "
                         "Avoid excluding duplicates on amplicon data, where they are expected.")
@@ -339,7 +324,7 @@ def parse_args(argv=None):
         "extra metrics",
         "Optional columns, off by default (the default output and speed are unchanged).\n")
     g.add_argument("--read-stats", action="store_true",
-                   help="Whole genome only. Adds read-level QC columns: %% properly paired, "
+                    help="Whole genome only. Adds read-level QC columns: %% properly paired, "
                         "%% MAPQ 0, secondary / supplementary / QC-fail reads, duplicates "
                         "flagged in the BAM (marked_dup_*) AND duplicates estimated from the "
                         "alignments (est_dup_*: same start, end, strand and mate position as "
@@ -347,7 +332,7 @@ def parse_args(argv=None):
                         "duplicates). Needs one extra check per read: slower (see the README). "
                         "Turned on automatically by --report in whole-genome mode.")
     g.add_argument("--uniformity", action="store_true",
-                   help="Adds depth-evenness columns (per sample, or per target in amplicon "
+                    help="Adds depth-evenness columns (per sample, or per target in amplicon "
                         "mode): median_coverage, cv_coverage (std/mean), pct_above_0.2_mean "
                         "(%% of positions with depth >= 0.2 x mean) and fold_80 (mean divided "
                         "by the depth reached by 80%% of the positions; 1 = perfectly even).")
@@ -360,41 +345,41 @@ def parse_args(argv=None):
         "A row is INTERPRETABLE when at least --interp-pct percent of its region is covered\n"
         "by at least --interp-depth reads (defaults: 75% at 10X).\n")
     g.add_argument("--interp-depth", type=int, metavar="DEPTH", default=None,
-                   help="Depth (in X) a position must reach to count as covered "
+                    help="Depth (in X) a position must reach to count as covered "
                         "(default: 10). Added to the <d>X columns if missing from --depths.")
     g.add_argument("--interp-pct", type=float, metavar="PERCENT", default=None,
-                   help="Minimum percentage of the region (or of the genome) that must reach "
+                    help="Minimum percentage of the region (or of the genome) that must reach "
                         "--interp-depth (default: 75). The decision uses the 2-decimal value "
                         "shown in the table.")
     g.add_argument("--interp-nodup", action="store_true",
-                   help="Whole genome only. By default the rule uses the depth of ALL reads. "
+                    help="Whole genome only. By default the rule uses the depth of ALL reads. "
                         "With this option duplicate reads (flagged 0x400 or estimated from the "
                         "alignments) are left out: the rule reads new columns <d>X_nodup "
                         "(breadth of coverage without duplicates), added next to the <d>X "
                         "columns. Useful for libraries with many duplicates (WGA, low input). "
                         "Slower (about +50-60%%: every read is checked for duplication).")
     g.add_argument("--no-interp", action="store_true",
-                   help="Do not compute the interpretability column (and no rule sliders in "
+                    help="Do not compute the interpretability column (and no rule sliders in "
                         "the report).")
 
     # --- Report ---
     g = p.add_argument_group("report")
     g.add_argument("--report", action="store_true",
-                   help="Also write a self-contained HTML report with tables and charts: "
+                    help="Also write a self-contained HTML report with tables and charts: "
                         "an overview of all samples and a detailed section per sample "
                         "(depth distribution and per-contig depth in whole-genome mode, "
                         "depth profile of every target in amplicon mode), sliders to change the "
                         "interpretability rule live, and (whole genome) a duplicates section. "
                         "Written to <out-dir>/<out-name>.html.")
     g.add_argument("--report-title", metavar="TEXT", default="fastbamqc report",
-                   help='Title shown at the top of the report (default: "fastbamqc report").')
+                    help='Title shown at the top of the report (default: "fastbamqc report").')
 
     # --- Performance ---
     g = p.add_argument_group("performance")
     g.add_argument("-c", "--max-cores", type=int, default=4, metavar="N",
-                   help="Total number of CPU cores to use (default: 4).")
+                    help="Total number of CPU cores to use (default: 4).")
     g.add_argument("-t", "--threads-per-bam", type=int, default=None, metavar="N",
-                   help="CPU cores used for EACH BAM file (default: automatic). Whole genome: the "
+                    help="CPU cores used for EACH BAM file (default: automatic). Whole genome: the "
                         "BAM is cut into windows shared between N processes, so one big file "
                         "also uses several cores. Amplicon: decompression threads. "
                         "BAM files processed in parallel = max-cores // threads-per-bam. "
@@ -404,9 +389,9 @@ def parse_args(argv=None):
     # --- Other ---
     g = p.add_argument_group("other options")
     g.add_argument("--log-file", metavar="FILE",
-                   help="Also write the progress messages to this file.")
-    g.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}",
-                   help="Show the version and exit.")
+                help="Also write the progress messages to this file.")
+    g.add_argument("-V", "-v", "--version", action="version", version=f"%(prog)s {__version__}",
+                help="Show the version and exit.")
     g.add_argument("-h", "--help", action="help", help="Show this help message and exit.")
 
     if argv is None:
@@ -421,14 +406,14 @@ def main(argv=None):
     argv_list = sys.argv[1:] if argv is None else list(argv)
     args = parse_args(argv_list)
 
-    # Logging: stderr (+ optional file)
+    # Logging
     handlers = [logging.StreamHandler(sys.stderr)]
     if args.log_file:
         handlers.append(logging.FileHandler(args.log_file))
     logging.basicConfig(level=logging.INFO, handlers=handlers,
                         format="[%(asctime)s] %(message)s", datefmt="%H:%M:%S")
 
-    # --- Preliminary checks (fail early, before the long computations) ---
+    # --- Preliminary checks ---
     if not os.path.isdir(args.input_dir):
         log.error("Directory not found: %s", args.input_dir)
         return 2
@@ -440,14 +425,14 @@ def main(argv=None):
         return 2
     if args.read_stats and args.bed:
         log.error("--read-stats is only available in whole-genome mode (without --bed): "
-                  "duplicates are expected in amplicon data")
+                "duplicates are expected in amplicon data")
         return 2
     if args.same_gene and not args.bed:
         log.error("--same-gene only makes sense together with --bed")
         return 2
     if args.interp_nodup and args.bed:
         log.error("--interp-nodup is only available in whole-genome mode (without --bed): "
-                  "duplicates are expected in amplicon data")
+                "duplicates are expected in amplicon data")
         return 2
     if args.interp_nodup and args.no_interp:
         log.error("--interp-nodup cannot be combined with --no-interp")
@@ -466,10 +451,10 @@ def main(argv=None):
             log.error("--interp-pct must be a percentage in ]0, 100]")
             return 2
         interp = (interp_depth, interp_pct, bool(args.interp_nodup))
-        if interp_depth not in args.depths:        # the verdict needs this <d>X column
+        if interp_depth not in args.depths:
             depths = sorted(set(args.depths) | {interp_depth})
             log.info("Depth threshold %dX added to the depth columns "
-                     "(needed for the interpretability rule)", interp_depth)
+                    "(needed for the interpretability rule)", interp_depth)
     bams = find_bams(args.input_dir, args.pattern)
     if not bams:
         log.error("No file matching '%s' in %s", args.pattern, args.input_dir)
@@ -484,10 +469,7 @@ def main(argv=None):
         except (OSError, ValueError) as exc:
             log.error("Invalid BED: %s", exc)
             return 2
-        # Check the contig names against the header of the first readable BAM: fail right
-        # away instead of getting N identical failures (e.g. 'chr1' vs '1'). A BAM that
-        # cannot be opened (empty, truncated, not a BAM) is only reported here: it will be
-        # listed as FAILED below, without stopping the other samples.
+
         references = None
         for path in bams:
             try:
@@ -502,54 +484,54 @@ def main(argv=None):
         unknown = missing_contigs(targets, references)
         if unknown:
             log.error("Invalid BED: BED contig(s) not found in the BAM: %s "
-                      "(different 'chr' prefix between BED and BAM?)", unknown[:5])
+                    "(different 'chr' prefix between BED and BAM?)", unknown[:5])
             return 2
         n_bp = sum(e - st for t in targets for ivs in t["intervals"].values() for st, e in ivs)
         log.info("Amplicon/panel mode: %d target(s), %d bp (%s)", len(targets), n_bp,
-                 "same-name BED lines merged" if merge else "one target per BED line")
+                "same-name BED lines merged" if merge else "one target per BED line")
     else:
         log.info("Whole-genome mode")
     if interp:
         log.info("Interpretability rule: INTERPRETABLE if at least %g%% of the region "
-                 "is covered at >= %dX%s", interp[1], interp[0],
-                 " (duplicate reads left out)" if interp[2] else "")
+                "is covered at >= %dX%s", interp[1], interp[0],
+                " (duplicate reads left out)" if interp[2] else "")
 
     # --- Parallelism: N BAM files at a time, each with T threads ---
-    if args.threads_per_bam is None:            # automatic: share the cores between the files
+    if args.threads_per_bam is None:
         jobs = max(1, min(len(bams), args.max_cores))
         per_bam = max(1, args.max_cores // jobs)
     else:
         per_bam = min(args.threads_per_bam, args.max_cores)
         jobs = max(1, min(args.max_cores // per_bam, len(bams)))
     log.info("%d BAM file(s) found | %d in parallel x %d core(s) each",
-             len(bams), jobs, per_bam)
+            len(bams), jobs, per_bam)
 
     # Analysis parameters sent to every worker
     kwargs = dict(depths=depths, threads=1,
-                  min_mapq=args.min_mapq, exclude_flags=args.exclude_flags,
-                  detail=args.report,       # extra data only needed by the report
-                  uniformity=args.uniformity)
+                min_mapq=args.min_mapq, exclude_flags=args.exclude_flags,
+                detail=args.report,
+                uniformity=args.uniformity)
     read_stats = args.read_stats or (args.report and targets is None)
     if args.report and targets is None and not args.read_stats:
         log.info("--report in whole-genome mode: read statistics (duplicates...) enabled "
-                 "for the duplicates section")
+                "for the duplicates section")
     if targets is None:
-        kwargs["workers"] = per_bam           # whole genome: processes sharing the windows of a BAM
+        kwargs["workers"] = per_bam
     else:
-        kwargs["threads"] = per_bam           # amplicon: decompression threads
+        kwargs["threads"] = per_bam
     if targets is None:
         kwargs["read_stats"] = read_stats
         if args.interp_nodup:
             kwargs["nodup"] = True
     grid_xs = make_grid(list(depths) + ([interp[0]] if interp else [])) if (args.report and interp) else None
-    if grid_xs:                              # the report sliders need the exact % at every grid depth
+    if grid_xs:
         kwargs["grid_xs"] = grid_xs
     if targets is None:
-        kwargs["contigs"] = args.contigs     # --contigs: whole-genome mode only
+        kwargs["contigs"] = args.contigs
     tasks = [(b, sample_name(b, args.pattern), kwargs, targets, interp) for b in bams]
 
     # --- Execution; the parent is the only one writing progress messages ---
-    results, details, failed = {}, {}, []    # results: {sample: [rows]}
+    results, details, failed = {}, {}, []
     for done, (sample, rows, extra, error) in enumerate(_run(tasks, jobs, nested=per_bam > 1 and targets is None), start=1):
         if error:
             failed.append(sample)
@@ -558,8 +540,8 @@ def main(argv=None):
             results[sample] = rows
             details[sample] = extra
             detail = (f"{len(rows)} target(s)" if targets is not None
-                      else f"mean coverage {rows[0]['mean_coverage']:.2f}X")
-            if interp:                       # verdict summary
+                    else f"mean coverage {rows[0]['mean_coverage']:.2f}X")
+            if interp:
                 if targets is not None:
                     n_ok = sum(r["interpretability"] == INTERPRETABLE for r in rows)
                     detail += f", {n_ok}/{len(rows)} interpretable"
@@ -572,9 +554,9 @@ def main(argv=None):
         log.error("No results to write.")
         return 1
     columns = output_columns(depths, targeted=targets is not None,
-                             interpretability=interp is not None,
-                             uniformity=args.uniformity, read_stats=read_stats,
-                             nodup=args.interp_nodup)
+                            interpretability=interp is not None,
+                            uniformity=args.uniformity, read_stats=read_stats,
+                            nodup=args.interp_nodup)
     fmt = args.out_format
     samples = sorted(results)
     os.makedirs(args.out_dir, exist_ok=True)
@@ -594,8 +576,7 @@ def main(argv=None):
                         os.path.join(per_dir, f"{sample}.amplicons.{fmt}"), fmt)
         log.info("%d per-sample file(s) in %s", len(samples), per_dir)
 
-    # Optional HTML report. Sliders data: exact % covered at every grid depth, one list per
-    # table row (same order as all_rows), taken out of the per-sample details.
+    # Optional HTML report
     grid = None
     if grid_xs:
         grid_rows = []
@@ -627,11 +608,11 @@ def main(argv=None):
                 command="fastbamqc " + " ".join(shlex.quote(a) for a in argv_list),
                 failed=failed)
             log.info("HTML report: %s", report_path)
-        except Exception as exc:             # noqa: BLE001: never lose the tables for a report error
+        except Exception as exc:
             log.error("Could not write the HTML report: %s: %s", type(exc).__name__, exc)
             failed.append("<report>")
 
-    if failed:                               # non-zero exit code if at least one failure
+    if failed:
         log.warning("%d sample(s) failed: %s", len(failed), ", ".join(sorted(failed)))
         return 1
     return 0

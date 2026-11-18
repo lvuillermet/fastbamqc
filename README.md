@@ -6,8 +6,10 @@
 </p>
 
 <p align="center">
-  <code>v1.0.3</code> &nbsp;·&nbsp; Python ≥ 3.9 &nbsp;·&nbsp; Linux / macOS (Windows through WSL)
+  <code>v1.1.0</code> &nbsp;·&nbsp; Python ≥ 3.9 &nbsp;·&nbsp; Linux / macOS (Windows through WSL)
 </p>
+
+![logo_fastbamqc](./logo.png)
 
 ---
 
