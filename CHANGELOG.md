@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - HTML report, whole-genome "Sample details": removed the "Duplicates and read breakdown" section; the page now ends with the per-contig table. The duplicates remain in the overview and in the sample's summary cards.
 - Lighter (slightly) the different scripts and HTML report, by removing superfluous comment
 - Added the '-v' argument (lowercase) for the version
+- Added a log-scale switch button on the 'Mean depth per contig' plot
 
 
 ## [1.0.3]

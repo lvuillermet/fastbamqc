@@ -979,9 +979,13 @@ function sampleGenome(root, s) {
   }
   if (d && d.contigs && d.contigs.length) {
     const cs = d.contigs, note = d.n_contigs > cs.length ? "Showing the " + cs.length + " largest of " + d.n_contigs + " contigs." : "All " + cs.length + " contigs." + (NODUP ? " Per-contig values include the duplicates." : "");
-    barChart(panel(root, "Mean depth per contig", note), {
-      labels: cs.map((c) => c.name), height: 300, yLabel: "mean depth (X)", fmt: (v, _s, i) => fx(v, 2) + "X  (" + fi(cs[i].length) + " bp)",
-      series: [{ name: "mean depth", values: cs.map((c) => c.mean), color: "var(--bar)" }] });
+    const ctgHost = panel(root, "Mean depth per contig", note, h("div", { class: "ctrl" }, [checkbox("Log scale", ST.logContig, (c) => { ST.logContig = c; drawContigs(); })]));
+    function drawContigs() {
+      barChart(ctgHost, {
+        labels: cs.map((c) => c.name), height: 300, yLabel: "mean depth (X)", log: !!ST.logContig, fmt: (v, _s, i) => fx(v, 2) + "X  (" + fi(cs[i].length) + " bp)",
+        series: [{ name: "mean depth", values: cs.map((c) => c.mean), color: "var(--bar)" }] });
+    }
+    drawContigs();
     const rows = cs.map((c) => { const o = Object.assign({}, c); DEPTHS.forEach((x, i) => { o["p" + i] = c.pct[i]; }); return o; });
     dataTable(panel(root, "Per-contig metrics", note), { rows: rows, maxHeight: 360, filename: "fastbamqc_" + s + "_contigs", fkey: "sm-contigs",
       columns: [{ key: "name", label: "contig", type: "str" }, { key: "length", label: "length", type: "num" }, { key: "mapped", label: "mapped_reads", type: "num" },
@@ -1063,7 +1067,7 @@ function renderSample() {
 }
 
 /* ============================================================ app / events */
-const ST = { tab: "overview", sample: D.samples[0], ovMetric: null, geneMetric: null, gene: 0, shared: true, log: false, logTarget: false, dirty: { overview: true, sample: true } };
+const ST = { tab: "overview", sample: D.samples[0], ovMetric: null, geneMetric: null, gene: 0, shared: true, log: false, logTarget: false, logContig: false, dirty: { overview: true, sample: true } };
 
 function renderActive() { if (ST.tab === "overview") renderOverview(); else renderSample(); }
 function showTab(t) {
