@@ -13,7 +13,7 @@
 
 ---
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23693362.svg)](https://doi.org/10.5281/zenodo.23693362)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24458684.svg)](https://doi.org/10.5281/zenodo.24458684)
 
 ## Contents
 
