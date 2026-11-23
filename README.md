@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <code>v1.1.0</code> &nbsp;·&nbsp; Python ≥ 3.9 &nbsp;·&nbsp; Linux / macOS (Windows through WSL)
+  <code>v1.1.1</code> &nbsp;·&nbsp; Python ≥ 3.9 &nbsp;·&nbsp; Linux / macOS (Windows through WSL)
 </p>
 
 ![logo_fastbamqc](./logo.png)
@@ -248,6 +248,14 @@ fastbamqc -i ./bams -o ./results -c 16 -t 2
 **Uniformity metrics and read statistics (tables only):**
 ```bash
 fastbamqc -i ./bams -o ./results --uniformity --read-stats
+```
+
+### Test on real files
+
+**Amplicon**
+Amplicon BAM and BAI files from *Plasmodium falciparum* with their BED file are available in `example/amplicon/`. To run the tool on it, you can use:
+```bash
+fastbamqc -i example/amplicon/ -o example/fastbamqc_amplicon --report --bed example/amplicon/genes_of_interest.bed
 ```
 
 ---

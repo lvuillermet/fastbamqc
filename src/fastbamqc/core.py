@@ -648,7 +648,7 @@ def analyze_targets(bam_path, targets, depths=(1, 5, 10), threads=1,
             if grid_xs:
                 srt = np.sort(r["profile"])
                 grids.append([_grid_hundredths(tlen - int(np.searchsorted(srt, x, side="left")), tlen)
-                            or x in grid_xs])
+                            for x in grid_xs])
 
             if detail:
                 region_sizes = [e - s for ivs in intervals.values() for s, e in ivs]

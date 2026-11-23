@@ -3,6 +3,14 @@
 All notable changes to fastbamqc are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+
+## [1.1.0]
+### Fixed
+- A correction in core scirpt
+
+### Changed
+- Added the first part of the example files (amplicon)
+
 ## [1.1.0]
 ### Changed
 - HTML report, "Sample details": new search box next to the sample list. Type any part of a sample name (case-insensitive, several words must all match) to get a suggestion list; arrows, Enter, Escape and the mouse work. Leaving it empty keeps the list and the two arrows as before.
@@ -15,7 +23,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [1.0.3]
 ### Changed
-- HTML report file size: the data embedded in the page are now stored as integer differences and deflate-compressed (decoded by a small decoder inside the page, which stays self-contained and works offline). Nothing is lost: the charts and the verdicts are identical. On the synthetic test sets, amplicon mode with 96 samples x 15 targets went from 10.6 MB to 1.4 MB, 1,920 samples x 30 targets from 63 MB to 8.2 MB (opening in about 1.3 s), and whole-genome mode with 300 samples from 0.62 MB to 0.23 MB.
+- HTML report file size: the data embedded in the page are now stored as integer differences and deflate-compressed (decoded by a small decoder inside the page, which stays self-contained and works offline). Not### Fixed
+- An unreadable BAM file (empty, truncated, not a BAM) found first in the input directory no longer produces the misleading message "Invalid BED: file does not contain alignment data": the BED is checked against the first readable BAM, and the unreadable files are reported as `FAILED` without stopping the other samples.
+hing is lost: the charts and the verdicts are identical. On the synthetic test sets, amplicon mode with 96 samples x 15 targets went from 10.6 MB to 1.4 MB, 1,920 samples x 30 targets from 63 MB to 8.2 MB (opening in about 1.3 s), and whole-genome mode with 300 samples from 0.62 MB to 0.23 MB.
 - HTML report, targets x samples heatmap: when there are too many samples to fit the page and the grid has to be scrolled sideways, the target names now stay fixed on the left.
 - HTML report, "Mean coverage per target" chart: new "Log scale" checkbox, useful when one or a few targets are much deeper than the others.
 
